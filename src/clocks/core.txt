@@ -1,0 +1,38 @@
+(comment 
+  "defblock macro to render complex interwoven
+  page which consists out of composable renderable blocks"
+  
+  (defblock :root [email]
+    (println "test")
+    (defblock :child-level-0-0 []
+      (println "child-level-0")
+      (defblock :child-level-1-0 []
+        (println "child-level-1-0")))
+    (defblock :child-level-0-1 []
+      (println "hello world")))
+
+  "will become"
+
+  [(create-struct
+    block
+    :root
+    (fn [request]
+      (println "test")
+      (callblock :child-level-0-0)
+      (callblock :child-level-0-1)))
+   [(create-struct
+     block
+     :child-level-0-0
+     (fn [request]
+       (println "child-level-0")
+       (callblock :child-level-1-0)))
+    [(create-struct
+      block
+      :child-level-1-0
+      (fn [request] (println "child-level-1-0")))]]
+   [(create-struct
+     block
+     :child-level-0-1
+     (fn [request] (println "hello world")))]]
+
+  )

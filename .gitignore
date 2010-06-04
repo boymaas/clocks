@@ -1,0 +1,11 @@
+*.bk
+*.pid
+.*.sw?
+.DS_Store
+._*
+.sw?
+_ref
+classes
+tags
+\#*\#
+.\#*
