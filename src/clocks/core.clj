@@ -22,18 +22,18 @@
         compojure.core))
 
 ;; the to be bound variables
-(declare r* s* p* t* method*)
+(declare r* s* p* method* routes*)
 
 (defmacro defblock [name params & body]
   `(html
     [~(keyword (str "div#" (str name)))
      (let [{:strs ~(vec params)} ~'p*]
-       ~@body)]))
+       (html ~@body))]))
 
 ;; extracting defblock from declaration
 ;; and associating these blocks with a specific
 ;; route
-(defstruct block-route :path :body)
+(defstruct block-route :name :path :body)
 (defn- extract-block-routes [body path]
   "parses defblocks recursively
    returning tree with route"
@@ -42,35 +42,47 @@
      (if (= (first s) 'defblock)
        (let [[_ name & body] s
              path (str path "." name)]
-         (concat [(struct block-route path (list s))] (extract-block-routes body path)))
+         (concat [(struct block-route (keyword name) path (list s))] (extract-block-routes body path)))
        (extract-block-routes s path)))))
 
 ;; wraps extracted block in default bound variables
 ;; creates shortcuts for request session params and t*
 (defn- wrap-extracted-block [eb]
+  ;; clojure on defined routes information
   `(fn [request#]
-     (binding [~'r* request#
-               ~'s* (:session request#)
-               ~'p* (:params request#)
-               ~'t* {}
-               ~'method* (:method request#)]
-       ~@eb)))
+     (let [routes# ~'routes*] ;; create local clojure for routing info
+       (binding [~'r* request#
+                 ~'s* (:session request#)
+                 ~'p* (:params request#)
+                 ~'routes* routes# 
+                 ~'method* (:method request#)]
+         ~@eb))))
 
 ;; build routes to all prossible block combinations
-(defn build-routes [name prefix body]
+(defn- build-routes [name prefix body]
   (letfn [(on-path-lenght [a b] (- (count (:path b)) (count (:path a))))]
-  ;; extract codeblock out of body and add complete
-  ;; block as well
+    ;; extract codeblock out of body and add complete
+    ;; block as well for root functionality
     (let [extracted-blocks (conj (extract-block-routes body "")
-                                 (struct block-route "" `((html ~@body))))]
-      (for [eb (sort on-path-lenght extracted-blocks)]
-        `(ANY ~(str prefix (:path eb)) [] ~(wrap-extracted-block (:body eb)))))))
+                                 (struct block-route :root "" `((html ~@body))))]
+      `(apply routes 
+              ;; build routemap for easy reference to url
+              ;; put in surrounding let to define
+              ;; local clojures inside anonumous functions
+              (let [~'routes*
+                    (hash-map ~@(flatten (map
+                                          (fn [eb] [(:name eb) (str prefix (:path eb))])
+                                          extracted-blocks)))]
+                ;; emit clojure ANY rules after sorting on lenght descending
+                ;; since we need longest route to match first
+                [~@(for [eb (sort on-path-lenght extracted-blocks)]
+                     `(ANY ~(str prefix (:path eb)) [] ~(wrap-extracted-block (:body eb))))])))))
 
 ;; defines on root level a set of routes
 ;; accessing the different blocks inside a page
 (defmacro defroutes-page [name prefix & body]
-  `(defroutes ~name
-        ~@(build-routes name prefix body)))
+  `(def ~name
+        ~(build-routes name prefix body)))
 
 ;; utility functions on the bound quick variables
 
@@ -78,5 +90,5 @@
 (defn callblock [name])
 
 ;; finds uri for block
-(defn block-url [block-name]
-  "block-url")
+(defn block-uri [block-name]
+  (routes* block-name))
