@@ -35,4 +35,48 @@
      :child-level-0-1
      (fn [request] (println "hello world")))]]
 
-  )
+  )(comment
+  (extract-block-routes '((defblock first (defblock nested (blah)) (defblock nested2 (blah)))) "/")
+  (extract-block-routes '([:div
+                           (defblock first
+                             [:h1 "blah"]
+                             (defblock nested
+                               [:h2 "blah2"])
+                             (defblock nested2
+                               [:p "blah"]))]) "/")
+  (te blah [:div
+            (defblock first
+              [:h1 "blah"]
+              (defblock nested
+                [:h2 "blah2"])
+              (defblock nested2
+                [:p "blah"]))])
+  )(defpage index "/index"
+  (html [:html
+         [:head
+          [:title "Welcome"]]
+         [:body
+          [:h1 "login"]
+          (defblock login-form []
+            [:form {:method :post}
+             (defblock email [email]
+               [:input {:type :text
+                        :value email
+                        :onchange (str "$(this).post(" (block-url :email-msg) r* ", {email: this.value})")}])
+             (defblock email-msg [email]
+               (if-let [msg (validate-email email)]
+                 [:div.errormsg msg]))])]]))
+
+;; utility function to rewrite function
+;; calls
+(defn- f->t [f t body? s]
+  "changes function call from f to t
+   and removes the body from the definition if required"
+  (if (= f (first s))
+    `(~t ~@(if body?
+              (rest s)
+              (list (second s))))
+    s))
+
+(def defblock->callblock (partial f->t 'defblock 'callblock false))
+

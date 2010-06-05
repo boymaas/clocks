@@ -1,63 +1,82 @@
+;; functionality to define blocks inside a place and
+;; generate small subfunctions to render them individually
+;;
+;; couples to compojure routes
+;;
+;; important exports:
+;;
+;; defroutes-page [name prefix & body]
+;;   converts page definitions into
+;;   small subfunctions callable via the defined
+;;   routes
+;;
+;; defblock [name param & block]
+;;   defines a block, returnin a string
+;;   renderable individually and inside a page
+
 (ns clocks.core
   (:use (clojure.contrib ns-utils
-                         seq-utils)
+                         seq-utils
+                         str-utils)
+        hiccup.core
         compojure.core))
 
+;; the to be bound variables
 (declare r* s* p* t* method*)
 
-(defstruct block :name :fn)
+(defmacro defblock [name params & body]
+  `(html
+    [~(keyword (str "div#" (str name)))
+     (let [{:strs ~(vec params)} ~'p*]
+       ~@body)]))
+
+;; extracting defblock from declaration
+;; and associating these blocks with a specific
+;; route
+(defstruct block-route :path :body)
+(defn- extract-block-routes [body path]
+  "parses defblocks recursively
+   returning tree with route"
+  (flatten
+   (for [s (filter sequential? body)]
+     (if (= (first s) 'defblock)
+       (let [[_ name & body] s
+             path (str path "." name)]
+         (concat [(struct block-route path (list s))] (extract-block-routes body path)))
+       (extract-block-routes s path)))))
+
+;; wraps extracted block in default bound variables
+;; creates shortcuts for request session params and t*
+(defn- wrap-extracted-block [eb]
+  `(fn [request#]
+     (binding [~'r* request#
+               ~'s* (:session request#)
+               ~'p* (:params request#)
+               ~'t* {}
+               ~'method* (:method request#)]
+       ~@eb)))
+
+;; build routes to all prossible block combinations
+(defn build-routes [name prefix body]
+  (letfn [(on-path-lenght [a b] (- (count (:path b)) (count (:path a))))]
+  ;; extract codeblock out of body and add complete
+  ;; block as well
+    (let [extracted-blocks (conj (extract-block-routes body "")
+                                 (struct block-route "" `((html ~@body))))]
+      (for [eb (sort on-path-lenght extracted-blocks)]
+        `(ANY ~(str prefix (:path eb)) [] ~(wrap-extracted-block (:body eb)))))))
+
+;; defines on root level a set of routes
+;; accessing the different blocks inside a page
+(defmacro defroutes-page [name prefix & body]
+  `(defroutes ~name
+        ~@(build-routes name prefix body)))
+
+;; utility functions on the bound quick variables
 
 ;; renders a specific block
 (defn callblock [name])
 
-;; render tree structure of all defined cblocks inside code
-;; bind variables
-;;   insert parent
-;;   append children
-(defn- f->t [f t body? s]
-  "changes function call from f to t
-   and removes the body from the definition if required"
-  (if (= f (first s))
-    `(~t ~@(if body?
-              (rest s)
-              (list (second s))))
-    s))
-
-(def defblock->callblock (partial f->t 'defblock 'callblock false))
-
-(defmacro defblock- [name params & body]
-  `[(create-struct block ~name
-                   (fn [~'request]
-                    (let [{:strs ~(vec params)} (~'request :params)]
-                       ~@(map defblock->callblock body))))
-
-    ~@(filter #(= 'defblock (first %)) body)])
-
-(defmacro defblock [name params & body]
-  `(do (let [{:strs ~(vec params)} ~'p*]
-         ~@(map defblock->callblock body))
-
-       ~@(filter #(= 'defblock (first %)) body)))
-
-(defmacro defpage [name base-uri & body]
-  `(def ~name (ANY ~(str base-uri "*") request# (dispatch ~base-uri request# (defblock ~name [] ~@body)))))
-
-
-(defn dispatch [base-uri request tree]
-  (fn [request]
-    (binding [r* request
-              s* (:session request)
-              p* (:params request)
-              t* tree
-              method* (:method request)]
-
-      ;; subtract base uri from request
-      ;; on nothing render root
-      ;; on path
-      ;; find block & render block
-      
-      )))
-
-
+;; finds uri for block
 (defn block-url [block-name]
   "block-url")
