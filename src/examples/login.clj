@@ -4,30 +4,33 @@
   (:require [compojure.route :as route])
   
   (:use ring.adapter.jetty)
-  (:use clocks.core)
-  (use [com.reasonr.scriptjure :only (js)])
+  (:use clocks.core
+        clocks.defjs
+        clocks.jquery)
+  (:use clojure.contrib.trace)
   (:use hiccup.core
         hiccup.page-helpers))
-        
+
 (defn validate-email [email]
   "message")
-
-(defmacro $js [& body]
-  `(js ($ (fn [] ~@body))))
 
 (defroutes-page index "/index"
   [:html
    [:head
-    (include-js "/jquery-1.4.2.min.js")]
-   (defblock level1 [email] ;; todo check on vector
-     [:h1 "Title" email]
-     [:h2 (block-uri :level1)]
-     [:input {:type :button :id :testbutton}]
-     [:script ($js (.click ($ "#testbutton") (fn [] (alert "Hello world"))))]
-     (defblock level2 []
-       [:p "paragraphs"]
-       [:ol (for [r routes*]
-              [:li r])]))])
+     (include-js "/jquery-1.4.2.min.js")]
+      (defblock level1 [email] ;; todo check on vector
+        [:h1 "Title" email]
+        [:h2 (block-uri :level1)]
+        [:input {:type :button :id :testbutton}]
+        ($defjs
+          ($. :testbutton click
+              (alert "blah"))
+          (alert "Hello world"))
+        
+        (defblock level2 []
+          [:p "paragraphs"]
+          [:ol (for [r routes*]
+                 [:li r])]))])
 
 (defroutes example
   index)
