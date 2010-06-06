@@ -22,13 +22,15 @@
 (defn render-js-forms [js-forms]
   (reduce
    (fn [a s]
-     (conj a (if (contains? *js-helpers* (first s))
+     (conj a (if (and (sequential? s)
+                      (contains? *js-helpers* (first s)))
                ;; macroexpand when defined as a helper
                ;; otherwise keep intact
-               (macroexpand-1 s) 
+               (macroexpand-1 (render-js-forms s)) 
+               ;; not a js-helper
                s)))
    '()
-   js-forms))
+   (reverse js-forms)))
 
 (defn keyword->cssid [k]
   (str "#" (subs (str k) 1)))
@@ -54,7 +56,7 @@ in the defjs block.
   (do
     (alter-var-root #'*js-helpers* conj name)
     `(defmacro ~name ~params
-       ~@body)))
+       ~@(render-js-forms body))))
 
 
 

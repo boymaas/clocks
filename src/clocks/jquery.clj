@@ -10,10 +10,19 @@
    stops."
   `[:script (js ($ (fn [] ~@(render-js-forms body))))])
 
-;; jquery helper macros to speed up jquery development
+;; jquery helper macros to speed up jquery de velopment
 
-(defjs-macro $. [id path & body]
-`(~'. (~'$ ~(keyword->cssid id)) ~path (fn [] ~@body)))
+;; quasiquote always resolves symbols used so either
+;; escape them or use lists
+
+(defjs-macro $id-on-event [id name & body]
+`(~'. (~'$ ~(keyword->cssid id)) ~name (fn [~'ev] ~@(render-js-forms body))))
+
+(defjs-macro $id-call [id func & params]
+`(~'. (~'$ ~(keyword->cssid id)) ~func ~@params))
+
+(defjs-macro $id-reload [id & params]
+  `(~'. (~'$ ~(keyword->cssid id)) ~'load (~'clj (block-uri ~id)) ~@params))
 
 (comment TESTS
 
@@ -22,4 +31,7 @@
        (alert "blah"))
    (alert "Hello"))
 
+ (render-js-forms '($id-on-event :login-form-email keyup
+                                 ($id-call :login-form-messages html
+                                           (+ ($id-call :login-form-email val) (. event keycode)))))
  )
