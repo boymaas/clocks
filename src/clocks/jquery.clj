@@ -16,7 +16,7 @@
 ;; escape them or use lists
 
 (defjs-macro $id-on-event [id name & body]
-`(~'. (~'$ ~(keyword->cssid id)) ~name (fn [~'ev] ~@(render-js-forms body))))
+`(~'. (~'$ ~(keyword->cssid id)) ~name (fn [~'ev] ~@body)))
 
 (defjs-macro $id-call [id func & params]
 `(~'. (~'$ ~(keyword->cssid id)) ~func ~@params))

@@ -1,5 +1,6 @@
 (ns clocks.defjs 
-    (use [com.reasonr.scriptjure :only (js)]))
+  (:use clojure.contrib.trace)
+  (:use [com.reasonr.scriptjure :only (js)]))
 
 (comment
   JAVASCRIPT MACROS
@@ -11,7 +12,7 @@
 
   we need js-helpers to check if its a helper and should
   be expanded. Took some time to figure out..
-)
+  )
 
 ;; using a set since contains? does not
 ;; traverse any indexed collections and
@@ -19,16 +20,19 @@
 (def *js-helpers* #{})
 
 ;; js-helpers
-(defn render-js-forms [js-forms]
+(deftrace render-js-forms [js-forms]
   (reduce
    (fn [a s]
-     (conj a (if (and (sequential? s)
-                      (contains? *js-helpers* (first s)))
-               ;; macroexpand when defined as a helper
-               ;; otherwise keep intact
-               (macroexpand-1 (render-js-forms s)) 
-               ;; not a js-helper
-               s)))
+     (conj a (if (not (sequential? s))
+               s ;; where finished here
+               ;; when sequential examine if its a helper
+               (if (contains? *js-helpers* (first s))
+                 (macroexpand-1 (render-js-forms s)) ;; expand
+                 (if (vector? s)
+                   (apply vector (render-js-forms s))
+                   (render-js-forms s)
+                   )) ;; if not dive in for the rest 
+               )))
    '()
    (reverse js-forms)))
 

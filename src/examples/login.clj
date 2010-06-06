@@ -28,7 +28,9 @@
 
   ($defjs
    (fn says [s]
-     (alert (+ "Simon sais:" s)))
+     (alert (+ "Simon sais:" s))))
+
+  ($defjs
 
    ($id-on-event :login-form-email keyup
                  ($id-call :login-form-messages html
