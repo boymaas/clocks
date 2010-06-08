@@ -78,7 +78,17 @@
           (block level2 []
                  [:p "paragraphs"]
                  [:ol (for [[k v] routes*]
-                        [:li k "-->" v])]))])
+                        [:li k "-->" [:a.pol {:href v} v]])]))
+
+   (block page-output []
+          "page output")]
+  ($defjs
+   (. ($ "a.pol") click (fn [event]
+                          (var url this.href)
+                          (. ($ "#page-output") load url)
+                          (. event preventDefault)
+                          (return false)))))
+
 
 (defroutes example
   index)
