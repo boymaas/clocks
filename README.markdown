@@ -102,8 +102,7 @@ It will only render the ..code... part of block3.
 
 See for more information `clocks/defjs` and `clocks/jquery`.
 
-   ;; do some server-isde validation
-   ($id-on-event :login-form-email keyup
+    ($id-on-event :login-form-email keyup
                  ($id-reload :validate {:email ($id-value :login-form-email)}))
 
 
@@ -122,16 +121,16 @@ These are called from withing a page using
 
 A short explanation of the implementations:
 
-0. expand callblock
+0. *expand callblock*
    for now all callblocks get expanded first, so the tree walker automaticly finds the correct
    paths and can create a function of them.
 
-1. extract special forms & register routes
+1. *extract special forms & register routes*
    code traverses the tree finding the special forms, currently `block` and `callblock`
    and stores them into a vector capturing all relevant informaiton including
    the path into the code.
 
-2. generate functions and routes
+2. *generate functions and routes*
    seperate functions are defined with a prefix so the namespace doesn't get polluted.
    and routes are generated.
 
