@@ -7,7 +7,8 @@
   (:use clocks.core
         clocks.defjs
         clocks.jquery)
-  (:use clojure.contrib.trace)
+  (:use clojure.contrib.trace
+        clojure.contrib.pprint)
   (:use [clojure.contrib.duck-streams :only (append-spit)])
   (:use hiccup.core
         hiccup.page-helpers))
@@ -18,7 +19,7 @@
 (defblock login-form [] 
   [:form {:id :login_form :method :post :url nil}
 
-   (block login-form-fields [email password]
+   (comment block login-form-fields [email password]
           [:input {:type :text, :id :login-form-email, :value email}]
           [:input {:type :password, :value password}])
 
@@ -26,6 +27,18 @@
 
   [:div#login-form-messages]
 
+  (block validate [email]
+    [:h2 email]
+    (if (not= email "boy")
+      [:h3 "incorrect"]
+      [:h3 "correct"]))
+
+  (json validate-json [email]
+        (str  (if (not= email "boy")
+                {:result true}
+                {:result false})))
+  
+  ;; javascript generation is sloooww ...
   ($defjs
    (fn says [s]
      (alert (+ "Simon sais:" s))))
@@ -33,14 +46,18 @@
   ($defjs
 
    ($id-on-event :login-form-email keyup
+                 (var v this.value)
                  ($id-call :login-form-messages html
-                           ($id-call :login-form-email val)))
+                           v))
+
+   ($id-on-event :login-form-email keyup
+                 ($id-reload :validate {:email ($id-value :login-form-email)}))
 
    ($id-on-event :login-form-submit click 
                  ($id-reload :login-form-fields {:email (. Math random)})
                  (return false))))
 
-(defroutes-page index "/index"
+(defroutes-page index "index"
   [:html
    [:head
     (include-js "/jquery-1.4.2.min.js")]
@@ -48,7 +65,7 @@
           [:h1 "Title" email]
           [:h2 (block-uri :level1)]
 
-          (callblock login login-form)
+          ;;(callblock login login-form)
 
           (block level2 []
                  [:p "paragraphs"]

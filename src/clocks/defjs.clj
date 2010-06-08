@@ -1,40 +1,28 @@
 (ns clocks.defjs 
   (:use clojure.contrib.trace)
+  (:use clojure.walk)
   (:use [com.reasonr.scriptjure :only (js)]))
 
 (comment
   JAVASCRIPT MACROS
 
-  since (js .. ) blocks macro
-  expantion we need to expand manually and feed the expantion
-  into a js functions
+  since scriptures (js .. ) blocks macro expantion we need
+  to expand our js-macro manually
 
+  to do this we traverse the defined js-forms recursivel
+  and keep on expanding untill all are expanded
 
-  we need js-helpers to check if its a helper and should
-  be expanded. Took some time to figure out..
+  this is done by expand-js-macros 
   )
 
-;; using a set since contains? does not
-;; traverse any indexed collections and
-;; we need to compare 
-(def *js-helpers* #{})
-
-;; js-helpers
-(deftrace render-js-forms [js-forms]
-  (reduce
-   (fn [a s]
-     (conj a (if (not (sequential? s))
-               s ;; where finished here
-               ;; when sequential examine if its a helper
-               (if (contains? *js-helpers* (first s))
-                 (macroexpand-1 (render-js-forms s)) ;; expand
-                 (if (vector? s)
-                   (apply vector (render-js-forms s))
-                   (render-js-forms s)
-                   )) ;; if not dive in for the rest 
-               )))
-   '()
-   (reverse js-forms)))
+(defn expand-js-macros 
+  "Recursively performs all possible macroexpansions in form."
+  [form]
+  (prewalk (fn [x] (if (and (seq? x)
+                            (= (first (str (first x))) \$))
+                     (macroexpand x)
+                     x))
+           form))
 
 (defn keyword->cssid [k]
   (str "#" (subs (str k) 1)))
@@ -47,7 +35,7 @@
    script tag, we need to eval the seperate form
    for output otherwise macro-expantion of nested macro's
    stops."
-  `[:script (js ~@(render-js-forms body))])
+  `[:script (js ~@(expand-js-macros body))])
 
 
 (defmacro defjs-macro [name params & body]
@@ -57,11 +45,6 @@ they schould be evaluated inside a defjs block
 they should just expand once. Thisis handled
 in the defjs block.
 "
-  (do
-    (alter-var-root #'*js-helpers* conj name)
-    `(defmacro ~name ~params
-       ~@(render-js-forms body))))
-
-
-
+  `(defmacro ~name ~params
+    ~@(expand-js-macros body)))
 
