@@ -76,29 +76,31 @@ For complete example see `examples/login.clj'.
 
 ## Description
 
-'defroutes-page' can be used to generate a page in which
+`defroutes-page` can be used to generate a page in which
 blocks can be accessed independitly from the rest of the system.
 
 This is implemented by scanning the source for special forms.
 
-'block' indicates a piece of code which can be accessed via a seperate route.
+`block` indicates a piece of code which can be accessed via a seperate route.
 these routes are defined by their path in the tree seperated by dots
 
-(defroutes-page name prefix
-    [:html (block level1 []
-           ..code...
-           (blcok level2 []
-                  ..code..
-                  (block level3 []
-                         ...code..))))
+    (defroutes-page name prefix
+        [:html (block level1 []
+               ..code...
+               (blcok level2 []
+                      ..code..
+                      (block level3 []
+                             ...code..))))
 
 In this case level3 can be reached by sending a request to:
 
-prefix.level1.level2.level3. It will only render the ..code... part of block3.
+    prefix.level1.level2.level3
+
+It will only render the ..code... part of block3.
 
 ## Javascript and javascript macro's
 
-See for more information `clocks/defjs' and `clocks/jquery'.
+See for more information `clocks/defjs` and `clocks/jquery`.
 
    ;; do some server-isde validation
    ($id-on-event :login-form-email keyup
@@ -110,31 +112,28 @@ See for more information `clocks/defjs' and `clocks/jquery'.
 Reusable blocks can be defined by `defblock'. These can be called with `callblock' from whithin
 a page.
 
-(defblock name [params] ...)
+    (defblock name [params] ...)
 
 These are called from withing a page using 
 
-(callblock name var-pointing-to-predefined-block)
+    (callblock name var-pointing-to-predefined-block)
 
 # IMPLEMENTATION 
 
 A short explanation of the implementations:
 
 0. expand callblock
-
- for now all callblocks get expanded first, so the tree walker automaticly finds the correct
- paths and can create a function of them.
+   for now all callblocks get expanded first, so the tree walker automaticly finds the correct
+   paths and can create a function of them.
 
 1. extract special forms & register routes
-
- code traverses the tree finding the special forms, currently `block' and `callblock'
- and stores them into a vector capturing all relevant informaiton including
- the path into the code.
+   code traverses the tree finding the special forms, currently `block' and `callblock'
+   and stores them into a vector capturing all relevant informaiton including
+   the path into the code.
 
 2. generate functions and routes
-
- seperate functions are defined with a prefix so the namespace doesn't get polluted.
- and routes are generated.
+   seperate functions are defined with a prefix so the namespace doesn't get polluted.
+   and routes are generated.
 
 ## EVALUATION CONTEXT / BINDINGS
 
