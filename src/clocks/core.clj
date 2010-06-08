@@ -31,7 +31,7 @@
 (defn- is-callblock? [s]
   (symbol-and-eq? s 'callblock))
 
-(defn block-name [b]
+(defn- block-name [b]
   (let [[_ name & _] b]
     name))
 
@@ -44,10 +44,9 @@
     `(~type ~name ~params
             ~@body)))
 
-
 ;; recursive walker
 
-(defn walker 
+(defn- walker 
  " a depth first tree walker
  customized for blocks takes
 
@@ -83,7 +82,7 @@ b: the body to parse
 
 
 ;; expand callblocks
-(defn body->expanded-body [body]
+(defn- body->expanded-body [body]
   (walker is-callblock? (fn [p b]
             (let [[type block-id label] b]
               ;; find name in registry
@@ -100,7 +99,7 @@ b: the body to parse
 
 ;; extract all individual blocks
 (declare *accumulator*)
-(defn body->vsf-block
+(defn- body->vsf-block
   ([body] (body->vsf-block body []))
   ([body path]
       (binding [*accumulator* []]
@@ -111,10 +110,10 @@ b: the body to parse
                 [] body)
         *accumulator*)))
 
-(defn vsf->msf [vsf]
+(defn- vsf->msf [vsf]
   (into {} (map #(vector (:name %) %) vsf)))
 
-(defn path->function-name [prefix p]
+(defn- path->function-name [prefix p]
   (symbol (str-join "-" (concat ["clpartial" prefix] p))))
 
 (defn- sf->function-name [prefix sf]
@@ -122,7 +121,7 @@ b: the body to parse
 
 ;; parse individual blocks and transform block
 ;; definition to named - callblocks calling to be generated functions
-(defn vsf-block->vsf-callblock [prefix vsf]
+(defn- vsf-block->vsf-callblock [prefix vsf]
   (let [route-map (vsf->msf vsf)]
     (for [sf vsf]
       (assoc sf :body (walker (fn [p b]
@@ -134,7 +133,7 @@ b: the body to parse
 
 
 
-(defn body->vsf-callblock [prefix body]
+(defn- body->vsf-callblock [prefix body]
   ;; let all defined blocks call eachother
   (vsf-block->vsf-callblock prefix
                             ;; accumulate all special forms
@@ -146,19 +145,19 @@ b: the body to parse
 ;; WRAPPING
 
 ;; todo: wraps have common code
-(defn wrap-block [name params body]
+(defn- wrap-block [name params body]
   `(html
     [~(keyword (str "div#" (str name)))
      (let [{:strs ~(vec params)} ~'p*]
        (html ~@body))]))
 
-(defn wrap-json [name params body]
+(defn- wrap-json [name params body]
   `(let [{:strs ~(vec params)} ~'p*]
     ~@body))
 
 ;; wraps extracted block in default bound variables
 ;; creates shortcuts for request session params and t*
-(defn sf->fn [sf]
+(defn- sf->fn [sf]
   ;; clojure on defined routes information
   `(fn [request#]
      (let [routes# ~'routes*] ;; create local clojure for routing info
@@ -187,40 +186,22 @@ b: the body to parse
 
 ;; macro expand to individual functions
 ;; named by prefix - path - name 
-(defn sf->defn [prefix sf route-map]
+(defn- sf->defn [prefix sf route-map]
   `(def ~(path->function-name prefix (:path sf))
             (let [~'routes* ~route-map]
               ~(sf->fn sf))))
 
-(defn vsf->defn [prefix vsf]
+(defn- vsf->defn [prefix vsf]
   (let [route-map (vsf->route-map prefix vsf)]
     (for [sf vsf]
       (sf->defn prefix sf route-map))))
 
-;; API
-
-
-(defmacro block [name params & body]
-  (wrap-block name params body))
-
-(defmacro json [name params & body]
-  (wrap-block name params body))
-
-
-(defmacro defjson [name params & body]
-  `(def ~name (struct special-form 'json  nil '~params '~body nil)))
-
-;; defines on root level a set of routes
-;; accessing the different blocks inside a page
-
-;(defmacro defroutes-page [name prefix & body]
-;  `(do ~@(define-block-functions name prefix body)))
-
 (defn- wrap-root-block [name body params]
   `(~'block ~name ~params ~@body))
 
-
-(defn sf-root? [sf]
+;; TODO: fix having to name the root-block with
+;; a special extention .. ugly and prone to name collision
+(defn- sf-root? [sf]
   (= (:name sf) "root"))
 
 (defn- vsf->any-routes [vsf func-prefix url-prefix]
@@ -230,6 +211,7 @@ b: the body to parse
                         (path->abs-uri url-prefix [])
                         (sf->abs-uri url-prefix sf)) [] ~(sf->function-name func-prefix sf)))]))
 
+;; API
 (defmacro defroutes-page [func-prefix url-prefix & body]
   (let [vsf (body->vsf-callblock func-prefix (wrap-root-block "root" body []))]
     `(do
@@ -247,31 +229,6 @@ b: the body to parse
   (let [wrapped-body (wrap-root-block func-prefix body params)]
     (alter-var-root #'*defblock-registry* #(assoc % (keyword func-prefix) (block->special-form wrapped-body [])))
     nil))
-
-
-(comment xdrp []
-  (defblock testblock [email password]
-    [:h2 "yepperdepep"])
-
-  (pprint (macroexpand '(defblock index []
-                          [:html
-                           [:head
-                            (include-js "/jquery-1.4.2.min.js")]
-                           (block level1 [email] ;; todo check on vector
-                                  [:h1 "Title" email]
-                                  [:h2 (block-uri :level1)]
-
-                                  ;;(callblock login login-form)
-
-                                  (block level2 []
-                                         [:p "paragraphs"]
-                                         [:ol (for [r routes*]
-                                                [:li r])]))])))
-
-  (pprint (body->expanded-body '(callblock :testblock blah)))
-  )
-
-(comment xdrp)
 
 ;; finds uri for block
 (defn block-uri [block-name]

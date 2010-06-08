@@ -31,16 +31,3 @@
 (defjs-macro $id-reload [id & params]
   `($id-call ~id ~'load (clj (block-uri ~id)) ~@params))
 
-(comment TESTS
-
- (defjs
-   ($. :testbutton click
-       (alert "blah"))
-   (alert "Hello"))
-
- (expand-js-macros '(fn says [s]
-     (alert (+ "Simon sais:" s))))
- 
- (expand-js-macros '($id-on-event :login-form-email keyup
-                                 ($id-reload :validate {:email ($id-value :login-form-email)})))
- )
