@@ -5,12 +5,15 @@
                          )
         clojure.walk
         clojure.contrib.pprint
+        clojure.contrib.trace
         hiccup.core
         compojure.core)
   (:require [clojure.zip :as zip]))
      
 ;; the to be bound variables
 (declare r* s* p* method* routes* in-page*)
+
+(def *defblock-registry* {})
 
 (defstruct special-form :type :name :params :body :path)
 
@@ -20,10 +23,13 @@
   (and (seq? s)
        (symbol? (first  s))
        ;; symbols resolve to same namespace var
-       (= (resolve (first s)) (resolve name))))
+       (= (first s) name)))
 
 (defn- is-block? [s]
-  (and (symbol-and-eq? s 'block)))
+  (symbol-and-eq? s 'block))
+
+(defn- is-callblock? [s]
+  (symbol-and-eq? s 'callblock))
 
 (defn block-name [b]
   (let [[_ name & _] b]
@@ -33,9 +39,15 @@
   (let [[type name params & body] b]
     (struct special-form type name params body path)))
 
+(defn- special-form->block [sf]
+  (let [{:keys [type name params body]} sf]
+    `(~type ~name ~params
+            ~@body)))
+
+
 ;; recursive walker
 
-(defn walker [f path b]
+(defn walker 
  " a depth first tree walker
  customized for blocks takes
 
@@ -47,25 +59,45 @@ path: initial path to start walking with
 
 b: the body to parse
 "
-  (let [path (if (is-block? b)
-               (concat path [(block-name b)]))
-        inner (partial walker f path)]
-    (let [b* (cond
-              (list? b) (apply list (map inner b))
-              (seq? b) (doall (map inner b))
-              (vector? b) (vec (map inner b))
-              ;;     (map? b) (into (if (sorted? b) (sorted-map) {})
-              ;;                    (map inner b))
-              ;;     (set? b) (into (if (sorted? b) (sorted-set) #{})
-              ;;                    (map inner b))
-              :else b)]
+ ([f path b] (walker is-block? f path b))
+ ([filter? f path b]
+     (let [path (if (filter? b)
+                  (conj path (block-name b))
+                  path)]
+       ;; define new function
+       (letfn [(inner [b] (walker filter? f path b))]
+         (prn path (filter? b) (subs (str b) 0 (min (count (str b)) 100) ))
+         (let [b* (cond
+                   (list? b) (apply list (map inner b))
+                   (seq? b) (doall (map inner b))
+                   (vector? b) (vec (map inner b))
+                   ;;(map? b) (into (if (sorted? b) (sorted-map) {})
+                   ;;                    (map inner b))
+                   ;;(set? b) (into (if (sorted? b) (sorted-set) #{})
+                   ;;                   (map inner b))
+                   :else b)]
 
-    ;; do something here with body
-      (if (is-block? b*)
-        (f path b*)
-        b*))))
+           ;; do something here with body
+           (if (filter? b*)
+             (f path b*)
+             b*))))))
 
 
+;; expand callblocks
+(defn body->expanded-body [body]
+  (walker is-callblock? (fn [p b]
+            (let [[type block-id label] b]
+              ;; find name in registry
+              ;; expand form
+              (if (not (contains? *defblock-registry* block-id))
+                (format  "Trying to call a nonexistsent body: (%s)" block-id)
+                ;; expand to block by finding the element form
+                ;; the registry and expanding it so the code scanner can
+                ;; create all the routes etc ...
+                (special-form->block (assoc (*defblock-registry* block-id) :name label))) 
+              ))
+          ;; extra params
+          [] body ))
 
 ;; extract all individual blocks
 (declare *accumulator*)
@@ -73,7 +105,7 @@ b: the body to parse
   ([body] (body->vsf-block body []))
   ([body path]
       (binding [*accumulator* []]
-        (walker (fn [p b]
+        (walker is-block? (fn [p b]
                   (set! *accumulator* (conj *accumulator*
                                             (block->special-form b p)))
                   b)
@@ -84,7 +116,7 @@ b: the body to parse
   (into {} (map #(vector (:name %) %) vsf)))
 
 (defn path->function-name [prefix p]
-  (symbol (str-join "-" (concat ["partial" prefix] p))))
+  (symbol (str-join "-" (concat ["clpartial" prefix] p))))
 
 (defn- sf->function-name [prefix sf]
   (path->function-name prefix (:path sf)))
@@ -96,7 +128,6 @@ b: the body to parse
     (for [sf vsf]
       (assoc sf :body (walker (fn [p b]
                                 (let [[_ name] b]
-                                  (prn name b)
                                   ;; (funcall *r)
                                   `(~(path->function-name prefix (:path (route-map name))) r*)
                                   ))
@@ -105,12 +136,13 @@ b: the body to parse
 
 
 (defn body->vsf-callblock [prefix body]
-  (vsf-block->vsf-callblock prefix (body->vsf-block body)))
-
-;; generate routes to call individual functions
-
-
-;; callblock macro expands to actual function call with request as parameter
+  ;; let all defined blocks call eachother
+  (vsf-block->vsf-callblock prefix
+                            ;; accumulate all special forms
+                            (body->vsf-block
+                             ;; expand all special forms that need
+                             ;; expansion
+                             (body->expanded-body body))))
 
 ;; WRAPPING
 
@@ -144,7 +176,7 @@ b: the body to parse
                    (throw (Exception. (str "Unknown type to wrap: " type) ))))))))
 
 (defn- path->abs-uri [prefix p]
-  (str "/" (str-join "/" (concat [prefix] p))))
+  (str "/" (str-join "/" (cons prefix p))))
 
 (defn- sf->abs-uri [prefix sf]
   (path->abs-uri prefix (:path sf)))
@@ -156,12 +188,15 @@ b: the body to parse
 
 ;; macro expand to individual functions
 ;; named by prefix - path - name 
+(defn sf->defn [prefix sf route-map]
+  `(def ~(path->function-name prefix (:path sf))
+            (let [~'routes* ~route-map]
+              ~(sf->fn sf))))
+
 (defn vsf->defn [prefix vsf]
   (let [route-map (vsf->route-map prefix vsf)]
     (for [sf vsf]
-      `(def ~(path->function-name prefix (:path sf))
-            (let [~'routes* ~route-map]
-              ~(sf->fn sf))))))
+      (sf->defn prefix sf route-map))))
 
 ;; API
 
@@ -172,8 +207,6 @@ b: the body to parse
 (defmacro json [name params & body]
   (wrap-block name params body))
 
-(defmacro defblock [name params & body]
-  nil)
 
 (defmacro defjson [name params & body]
   `(def ~name (struct special-form 'json  nil '~params '~body nil)))
@@ -184,8 +217,8 @@ b: the body to parse
 ;(defmacro defroutes-page [name prefix & body]
 ;  `(do ~@(define-block-functions name prefix body)))
 
-(defn- wrap-root-block [name body]
-  `(~'block ~name [] ~@body))
+(defn- wrap-root-block [name body params]
+  `(~'block ~name ~params ~@body))
 
 
 (defn sf-root? [sf]
@@ -199,7 +232,7 @@ b: the body to parse
                         (sf->abs-uri url-prefix sf)) [] ~(sf->function-name func-prefix sf)))]))
 
 (defmacro defroutes-page [func-prefix url-prefix & body]
-  (let [vsf (body->vsf-callblock func-prefix (wrap-root-block "$ROOT$" body))]
+  (let [vsf (body->vsf-callblock func-prefix (wrap-root-block "$ROOT$" body []))]
     `(do
        ;; generate functions for partials
        ~@(vsf->defn func-prefix vsf)
@@ -209,8 +242,19 @@ b: the body to parse
             ~(vsf->any-routes vsf func-prefix url-prefix))))
   )
 
-(defn xdrp []
-  (pprint (macroexpand '(defroutes-page index "index"
+(defmacro defblock [func-prefix params & body]
+  (assert (symbol? func-prefix))
+  (assert (vector? params))
+  (let [wrapped-body (wrap-root-block func-prefix body params)]
+    (alter-var-root #'*defblock-registry* #(assoc % (keyword func-prefix) (block->special-form wrapped-body [])))
+    nil))
+
+
+(comment xdrp []
+  (defblock testblock [email password]
+    [:h2 "yepperdepep"])
+
+  (pprint (macroexpand '(defblock index []
                           [:html
                            [:head
                             (include-js "/jquery-1.4.2.min.js")]
@@ -224,9 +268,11 @@ b: the body to parse
                                          [:p "paragraphs"]
                                          [:ol (for [r routes*]
                                                 [:li r])]))])))
+
+  (pprint (body->expanded-body '(callblock :testblock blah)))
   )
 
-(xdrp)
+(comment xdrp)
 
 ;; finds uri for block
 (defn block-uri [block-name]

@@ -17,26 +17,34 @@
   "message")
 
 (defblock login-form [] 
+  (block little-one []
+         "Nothing really interesting ..")
+
   [:form {:id :login_form :method :post :url nil}
 
-   (comment block login-form-fields [email password]
+   (block login-form-fields [email password]
+          (block nested [blah]
+                 "see if this makes a difference")
+          
           [:input {:type :text, :id :login-form-email, :value email}]
           [:input {:type :password, :value password}])
+   
 
    [:button {:id :login-form-submit}]] 
+
 
   [:div#login-form-messages]
 
   (block validate [email]
-    [:h2 email]
-    (if (not= email "boy")
-      [:h3 "incorrect"]
-      [:h3 "correct"]))
+         [:h2 email]
+         (if (not= email "boy")
+           [:h3 "incorrect"]
+           [:h3 "correct"]))
 
-  (json validate-json [email]
-        (str  (if (not= email "boy")
-                {:result true}
-                {:result false})))
+  (block validate-json [email]
+         (str  (if (not= email "boy")
+                 {:result true}
+                 {:result false})))
   
   ;; javascript generation is sloooww ...
   ($defjs
@@ -65,12 +73,12 @@
           [:h1 "Title" email]
           [:h2 (block-uri :level1)]
 
-          ;;(callblock login login-form)
+          (callblock :login-form login-form)
 
           (block level2 []
                  [:p "paragraphs"]
-                 [:ol (for [r routes*]
-                        [:li r])]))])
+                 [:ol (for [[k v] routes*]
+                        [:li k "-->" v])]))])
 
 (defroutes example
   index)
