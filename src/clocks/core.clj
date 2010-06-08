@@ -66,7 +66,6 @@ b: the body to parse
                   path)]
        ;; define new function
        (letfn [(inner [b] (walker filter? f path b))]
-         (prn path (filter? b) (subs (str b) 0 (min (count (str b)) 100) ))
          (let [b* (cond
                    (list? b) (apply list (map inner b))
                    (seq? b) (doall (map inner b))
@@ -222,7 +221,7 @@ b: the body to parse
 
 
 (defn sf-root? [sf]
-  (= (:name sf) "$ROOT$"))
+  (= (:name sf) "root"))
 
 (defn- vsf->any-routes [vsf func-prefix url-prefix]
   `(apply routes
@@ -232,7 +231,7 @@ b: the body to parse
                         (sf->abs-uri url-prefix sf)) [] ~(sf->function-name func-prefix sf)))]))
 
 (defmacro defroutes-page [func-prefix url-prefix & body]
-  (let [vsf (body->vsf-callblock func-prefix (wrap-root-block "$ROOT$" body []))]
+  (let [vsf (body->vsf-callblock func-prefix (wrap-root-block "root" body []))]
     `(do
        ;; generate functions for partials
        ~@(vsf->defn func-prefix vsf)
@@ -276,79 +275,5 @@ b: the body to parse
 
 ;; finds uri for block
 (defn block-uri [block-name]
-  (routes* block-name))
+ (routes* block-name))
 
-(comment
-
-  CLOCKS.CORE DEFINES A WEBDSL ON TOP OF COMPOJURE.
-
-  'defroutes-page' can be used to generate a page in which
-  blocks can be accessed independitly from the rest of the system.
-
-  This is implemented by scanning the source for special forms.
-
-  'block' indicates a piece of code which can be accessed via a seperate route.
-  these routes are defined by their path in the tree seperated by dots
-
-  (defroutes-page name prefix
-    (block level1 []
-           ..code...
-           (blcok level2 []
-                  ..code..
-                  (block level3 []
-                         ...code..))))
-  
-  In this case level3 can be reached by
-
-  prefix.level1.level2.level3. It will only render the ..code... part of block3.
-
-  REUSABLE BLOCKS
-  
-  Reusable blocks can be defined by `defblock'. These can be called with `callblock' from whithin
-  a page.
-  
-  (defblock name [params] ...)
-
-  These are called from withing a page using 
-
-  (callblock name predefined-block)
-
-  EVALUATION CONTEXT / BINDINGS
-  
-  Blocks get transformed to anonymous functions with the following bindings, all with a * postfix 
-  
-  (binding [~'r* request#                     ;; request
-            ~'s* (:session request#)          ;; session if available
-            ~'p* (:params request#)           ;; params
-            ~'routes* routes#                 ;; routes inside page
-            ~'method* (:method request#)]     ;; method of request
-
-    ...block code... )
-
-  These bindings are present for helper functions. Such as `block-uri' which looks up
-  the uri of the block by name.
-
-  COMPILATION OF BLOCKS
-
-  1. extract special forms & register routes
-     block
-     callblock
-
-     and store them into array of block-routes. Storing name, paramsm path, unevaluated body. 
-
-
-     the last block is the complete page
-
-     callblocks get expanded into the defblocks which defined them.
-
- 2. accumulate data from all defined forms
-     build routes map _name _path from array of block routes
-     routes can now be closed over in the individual blocks.
-     
-     3. wrap each individual block body in a anonymous function
-     binding the accumulated data and request bindings (see bindings above)
-
-     4. use these wrapped body's to build compojure ANY routes
-     
-     Keep as much flexibility in your data!
-)
