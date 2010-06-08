@@ -1,7 +1,7 @@
 # CLOCKS DEFINES A WEBDSL ON TOP OF COMPOJURE
 
 Implementation of a webdsl on top op compojure, uses ring, compojure and scriptjure as
-clojure foundation, and jquery on the clientside.
+serverside foundation, and jquery on the clientside.
 
 ## Usage
 
