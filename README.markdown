@@ -5,7 +5,7 @@ clojure foundation, and jquery on the clientside.
 
 ## Usage
 
-For complete example see `examples/login.clj'.
+For complete example see `examples/login.clj`.
 
     (defblock login-form [] 
       [:form {:id :login_form :method :post :url nil}
@@ -109,7 +109,7 @@ See for more information `clocks/defjs` and `clocks/jquery`.
 
 ## REUSABLE BLOCKS
 
-Reusable blocks can be defined by `defblock'. These can be called with `callblock' from whithin
+Reusable blocks can be defined by `defblock`. These can be called with `callblock` from whithin
 a page.
 
     (defblock name [params] ...)
@@ -127,7 +127,7 @@ A short explanation of the implementations:
    paths and can create a function of them.
 
 1. extract special forms & register routes
-   code traverses the tree finding the special forms, currently `block' and `callblock'
+   code traverses the tree finding the special forms, currently `block` and `callblock`
    and stores them into a vector capturing all relevant informaiton including
    the path into the code.
 
@@ -140,15 +140,15 @@ A short explanation of the implementations:
 Blocks get transformed to anonymous functions with the following thread-local bindings, 
 all with a * postfix: 
 
-    (binding [~'r* request#                     ;; request
-            ~'s* (:session request#)          ;; session if available
-            ~'p* (:params request#)           ;; params
-            ~'routes* routes#                 ;; routes inside page
-            ~'method* (:method request#)]     ;; method of request
+    (binding [r* request#                     ;; request
+            s* (:session request#)          ;; session if available
+            p* (:params request#)           ;; params
+            routes* routes#                 ;; routes inside page
+            method* (:method request#)]     ;; method of request
 
             ...block code... )
 
-These bindings are present for helper functions. Such as `block-uri' which looks up
+These bindings are present for helper functions. Such as `block-uri` which looks up
 the uri of the block by name.
 
 # Licence
