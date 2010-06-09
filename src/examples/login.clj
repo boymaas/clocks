@@ -13,9 +13,6 @@
   (:use hiccup.core
         hiccup.page-helpers))
 
-(defn validate-email [email]
-  "message")
-
 (defblock login-form [] 
   [:form {:id :login_form :method :post :url nil}
 
