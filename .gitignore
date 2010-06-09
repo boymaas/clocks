@@ -2,10 +2,11 @@
 *.pid
 .*.sw?
 .DS_Store
+.\#*
 ._*
 .sw?
+/lib
+\#*\#
 _ref
 classes
 tags
-\#*\#
-.\#*
