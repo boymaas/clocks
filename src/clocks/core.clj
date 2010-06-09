@@ -16,6 +16,8 @@
   msf   map special form, indexed by name
   )
 
+(def *sf-root-name* "root")
+
 ;; the to be bound variables
 ;; for usage in helper functions
 (declare r* s* p* method* routes* in-page*)
@@ -242,16 +244,21 @@ definition"
 (defn- sf-root?
   "checks if it is a root-block by its name"
   [sf]
-  (= (:name sf) "root"))
+  (= (:name sf) *sf-root-name*))
 
 (defn- vsf->any-routes
   "generates any routes for a vsf"
   [vsf func-prefix url-prefix]
   `(apply routes
           [~@(for [sf vsf]
-               `(ANY ~(if (sf-root? sf)
-                        (path->abs-uri url-prefix [])
-                        (sf->abs-uri url-prefix sf)) [] ~(sf->function-name func-prefix sf)))]))
+               `(ANY ~(sf->abs-uri url-prefix sf) [] ~(sf->function-name func-prefix sf)))]))
+
+(defn- unwrap-root-path [vsf]
+  "since we wrap a block around a page-block
+we have an extra level in our path which we
+remove since we don't have to introduce cases in our
+code to cope with this unneeded prefix"
+  (map #(assoc % :path (rest (:path %))) vsf))
 
 ;; API
 (defmacro defroutes-page
@@ -260,7 +267,13 @@ definition"
   (assert (symbol? func-prefix))
   (assert (string? url-prefix))
   (assert (sequential? body))
-  (let [vsf (body->vsf:fn-call func-prefix (wrap-root-block "root" body []))]
+  (let [vsf:block->vsf:fn-call (partial vsf:block->vsf:fn-call func-prefix)
+        vsf (-> (wrap-root-block *sf-root-name* body []) 
+                (body->expanded-body)     ;; expand callblocks
+                 (body->vsf)              ;; extract sf
+                 (unwrap-root-path)       ;; remove wrapped from path
+                 (vsf:block->vsf:fn-call) ;; implode blocks to funcalls
+                 )]
     `(do
        ;; generate functions for partials
        ~@(vsf->defn func-prefix vsf)
