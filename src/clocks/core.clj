@@ -1,13 +1,9 @@
 (ns clocks.core
-  (:use (clojure.contrib ns-utils
-                         ;; seq-utils
-                         str-utils
-                         )
-        clojure.walk
+  (:use 
         clojure.contrib.fcase
         hiccup.core
-        compojure.core)
-  (:require [clojure.zip :as zip]))
+        compojure.core
+        clocks.data))
      
 (comment
   sf    spefical form eg. callblock block
@@ -25,26 +21,6 @@
 ;; defined blocks will get expaned inside
 ;; a page definition
 (def *defblock-registry* {})
-
-;; struct storing information on a special
-;; form
-(defstruct special-form :type :name :params :body :path)
-
-;; some helpers
-(defn- symbol-and-eq? [s name]
-  (and (seq? s)
-       (symbol? (first  s))
-       ;; symbols resolve to same namespace var
-       (= (first s) name)))
-
-(defn- is-block? [s]
-  (symbol-and-eq? s 'block))
-
-(defn- is-callblock? [s]
-  (symbol-and-eq? s 'callblock))
-
-(defn- block-name [b]
-  (second b))
 
 (defn- block->special-form 
   "converts block to special form"
@@ -113,23 +89,6 @@
                 [] body)
         *accumulator*)))
 
-(defn- vsf->msf
-  "converts vector of special forms to map
-indexed by name"
-  [vsf]
-  (into {} (map #(vector (:name %) %) vsf)))
-
-(defn- path->function-name
-  "converts a path [] to a function name always prefixed
-with and identifier to prevent namespace collisions"
-  [prefix p]
-  (symbol (str-join "-" (concat ["clpartial" prefix] p))))
-
-(defn- sf->function-name
-  "see path->function-name"
-  [prefix sf]
-  (path->function-name prefix (:path sf)))
-
 ;; parse individual blocks and transform block
 ;; definition to named - callblocks calling to be generated functions
 (defn- vsf:block->vsf:fn-call 
@@ -145,22 +104,8 @@ to a direct function call"
                                   ))
                               [] (:body sf))))))
 
-
-
-(defn- body->vsf:fn-call 
-  "does a complete transformation of body
-to vsf to be used in final macroexpantion"
-  [prefix body]
-  (vsf:block->vsf:fn-call prefix
-                            ;; accumulate all special forms
-                            (body->vsf
-                             ;; expand all special forms that need
-                             ;; expansion
-                             (body->expanded-body body))))
-
 ;; WRAPPING
 
-;; todo: wraps have common code
 (defn- wrap-block 
   "wraps a block into a form able
 to output a html request and preparses
@@ -185,7 +130,7 @@ anonymous function binding all the helper
 variables"
   [sf]
   `(fn [request#]
-     (let [routes# routes*] ;; create local clojure for routing info
+     (let [routes# ~'routes*] ;; create local clojure for routing info
        (binding [r* request#
                  s* (:session request#)
                  p* (:params request#)
@@ -197,23 +142,6 @@ variables"
                    'json (wrap-json name params body)
                    'block (wrap-block name params body)
                    (throw (Exception. (str "Unknown type to wrap: " type) ))))))))
-
-(defn- path->abs-uri
-  "see sf->abs-uri .."
-  [prefix p]
-  (str "/" (str-join "." (cons prefix p))))
-
-(defn- sf->abs-uri
-  "returns a path to the special form"
-  [prefix sf]
-  (path->abs-uri prefix (:path sf)))
-
-(defn- vsf->route-map
-  "transforms vsf to a route-map indexed by block name"
-  [prefix vsf]
-  (into {} (map
-            (fn [sf] [(keyword (:name sf)) (sf->abs-uri prefix sf)])
-            vsf)))
 
 ;; macro expand to individual functions
 ;; named by prefix - path - name 
@@ -261,7 +189,6 @@ code to cope with this unneeded prefix"
   [func-prefix url-prefix & body]
   (assert (symbol? func-prefix))
   (assert (string? url-prefix))
-  (assert (sequential? body))
   (let [vsf:block->vsf:fn-call (partial vsf:block->vsf:fn-call func-prefix)
         vsf (-> (wrap-root-block *sf-root-name* body []) 
                 (body->expanded-body)     ;; expand callblocks

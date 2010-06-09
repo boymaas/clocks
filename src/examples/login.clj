@@ -1,14 +1,13 @@
 (ns examples.login
-  (:use compojure.core
-        (ring.middleware session params reload keyword-params stacktrace file))
   (:require [compojure.route :as route])
-  
-  (:use ring.adapter.jetty)
-  (:use clocks.core
+  (:use compojure.core
+        (ring.middleware session file)
+        ring.adapter.jetty
+        clocks.core
         clocks.defjs
-        clocks.jquery)
-  (:use [clojure.contrib.duck-streams :only (append-spit)])
-  (:use hiccup.core
+        clocks.jquery
+        [clojure.contrib.duck-streams :only (append-spit)]
+        hiccup.core
         hiccup.page-helpers))
 
 (defblock login-form [] 
@@ -85,7 +84,7 @@
 
 ;; define example servlet
 (defroutes example
-  index)
+  "prefix" [] index)
 
 (defn wrap-debug-log [handler]
   (fn [r]

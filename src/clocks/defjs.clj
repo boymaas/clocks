@@ -1,5 +1,4 @@
 (ns clocks.defjs 
-  (:use clojure.contrib.trace)
   (:use clojure.walk)
   (:use [com.reasonr.scriptjure :only (js)]))
 
@@ -42,8 +41,8 @@
   "define a javascript macro, javascript
 macros are different from other macros since
 they schould be evaluated inside a defjs block
-they should just expand once. Thisis handled
-in the defjs block.
+they should just expand once. This is handled
+in a defjs block.
 "
   `(defmacro ~name ~params
     ~@(expand-js-macros body)))
