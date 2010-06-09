@@ -49,11 +49,11 @@
                  ($id-reload :login-form-fields {:email (. Math random)})
                  (return false))))
 
-(defroutes-page testpage "test"
+(defpage testpage 
   [:html
    [:head]])
 
-(defroutes-page index "index"
+(defpage index
   [:html
    [:head
     (include-js "/jquery-1.4.2.min.js")]
@@ -82,9 +82,10 @@
                           (return false)))))
 
 
+
 ;; define example servlet
 (defroutes example
-  "prefix" [] index)
+  (PAGE "/index" index))
 
 (defn wrap-debug-log [handler]
   (fn [r]

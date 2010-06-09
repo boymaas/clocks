@@ -1,8 +1,10 @@
 (ns clocks.core
   (:use 
         clojure.contrib.fcase
+        clojure.contrib.trace
         hiccup.core
         compojure.core
+        clojure.walk
         clocks.data))
      
 (comment
@@ -100,7 +102,7 @@ to a direct function call"
       (assoc sf :body (walker is-block? (fn [p b]
                                 (let [[_ name] b]
                                   ;; (funcall *r)
-                                  `(~(sf->function-name prefix (msf name)) r*)
+                                  `(~(sf->function-name prefix (msf name)) ~'uri-prefix* r*)
                                   ))
                               [] (:body sf))))))
 
@@ -124,24 +126,25 @@ request params"
   `(let [{:strs ~(vec params)} ~'p*]
     ~@body))
 
+
 (defn- sf->fn
   "closes route information inside an
 anonymous function binding all the helper
 variables"
   [sf]
-  `(fn [request#]
-     (let [routes# ~'routes*] ;; create local clojure for routing info
-       (binding [r* request#
-                 s* (:session request#)
-                 p* (:params request#)
-                 routes* routes# 
-                 method* (:method request#)]
+  `(fn [~'uri-prefix* request#]
+     (binding [r* request#
+               s* (:session request#)
+               p* (:params request#)
+               routes* (prepend-uri-prefix ~'uri-prefix* ~'page-route-map*) 
 
-         ~(let [{:keys [type name params body]} sf]
-             (case type
-                   'json (wrap-json name params body)
-                   'block (wrap-block name params body)
-                   (throw (Exception. (str "Unknown type to wrap: " type) ))))))))
+               method* (:method request#)]
+
+       ~(let [{:keys [type name params body]} sf]
+          (case type
+                'json (wrap-json name params body)
+                'block (wrap-block name params body)
+                (throw (Exception. (str "Unknown type to wrap: " type) )))))))
 
 ;; macro expand to individual functions
 ;; named by prefix - path - name 
@@ -169,12 +172,11 @@ definition"
   [sf]
   (= (:name sf) *sf-root-name*))
 
-(defn- vsf->any-routes
+(defn vsf->any-routes
   "generates any routes for a vsf"
   [vsf func-prefix url-prefix]
-  `(apply routes
-          [~@(for [sf vsf]
-               `(ANY ~(sf->abs-uri url-prefix sf) [] ~(sf->function-name func-prefix sf)))]))
+  (for [sf vsf]
+    `(ANY ~(sf->abs-uri sf url-prefix) [] (partial ~(sf->function-name func-prefix sf) ~url-prefix))))
 
 (defn- unwrap-root-path [vsf]
   "since we wrap a block around a page-block
@@ -183,27 +185,41 @@ remove since we don't have to introduce cases in our
 code to cope with this unneeded prefix"
   (map #(assoc % :path (rest (:path %))) vsf))
 
+(defn walk-symbol->str [t]
+  (prewalk (fn [f] (if (symbol? f)
+                     (str f)
+                     f)) t)
+  )
+
+(defn vsf->mexpandable-vsf [vsf]
+  (walk-symbol->str (map #(assoc % :body nil :path (vec (:path %))) vsf)))
+
 ;; API
-(defmacro defroutes-page
+(defmacro defpage
   "to define a page"
-  [func-prefix url-prefix & body]
+  [func-prefix & body]
   (assert (symbol? func-prefix))
-  (assert (string? url-prefix))
   (let [vsf:block->vsf:fn-call (partial vsf:block->vsf:fn-call func-prefix)
         vsf (-> (wrap-root-block *sf-root-name* body []) 
                 (body->expanded-body)     ;; expand callblocks
-                 (body->vsf)              ;; extract sf
-                 (unwrap-root-path)       ;; remove wrapped from path
-                 (vsf:block->vsf:fn-call) ;; implode blocks to funcalls
-                 )]
+                (body->vsf)              ;; extract sf
+                (unwrap-root-path)       ;; remove wrapped from path
+                (vsf:block->vsf:fn-call) ;; implode blocks to funcalls
+                )]
     `(do
-      (let [~'routes* ~(vsf->route-map url-prefix vsf)]
-       ;; generate functions for partials
-       ~@(vsf->defn func-prefix vsf))
+       (let [~'page-route-map* ~(vsf->route-map vsf)]
+         ;; generate functions for partials
+         ~@(vsf->defn func-prefix vsf))
 
-      ;; generate any routes for functions
-      (def ~func-prefix
-           ~(vsf->any-routes vsf func-prefix url-prefix)))))
+       ;; generate any routes for functions
+       (def ~func-prefix {:vsf ~(vec (vsf->mexpandable-vsf vsf))
+                          :func-prefix ~(str func-prefix)}))))
+
+(defmacro PAGE [url-prefix page]
+  (assert (string? url-prefix))
+  (assert (symbol? page))
+  (let [page (var-get (resolve page))]
+    `(routes ~@(vsf->any-routes (:vsf page) (:func-prefix page) url-prefix))))
 
 (defmacro defblock
   "to define a block which can get expanded in a
