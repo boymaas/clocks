@@ -16,7 +16,9 @@ with and identifier to prevent namespace collisions"
 (defn prepend-uri-prefix [uri-prefix routes]
   "prepends uri-prefix to route table" 
   (into {} (for [[k v] routes]
-             [k (str-join "." [uri-prefix v])])))
+             [k (if (empty? v)
+                  uri-prefix
+                  (str-join "." [uri-prefix v]))])))
 
 ;; Special forms inside code blocks
 ;; and operations on them
