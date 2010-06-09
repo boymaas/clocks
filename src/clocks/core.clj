@@ -236,8 +236,6 @@ definition"
   [name body params]
   `(~'block ~name ~params ~@body))
 
-;; TODO: fix having to name the root-block with
-;; a special extention .. ugly and prone to name collision
 (defn- sf-root?
   "checks if it is a root-block by its name"
   [sf]
