@@ -7,8 +7,6 @@
   (:use clocks.core
         clocks.defjs
         clocks.jquery)
-  (:use clojure.contrib.trace
-        clojure.contrib.pprint)
   (:use [clojure.contrib.duck-streams :only (append-spit)])
   (:use hiccup.core
         hiccup.page-helpers))
@@ -51,6 +49,10 @@
    ($id-on-event :login-form-submit click 
                  ($id-reload :login-form-fields {:email (. Math random)})
                  (return false))))
+
+(defroutes-page testpage "test"
+  [:html
+   [:head]])
 
 (defroutes-page index "index"
   [:html

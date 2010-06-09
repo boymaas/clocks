@@ -4,8 +4,7 @@
                          str-utils
                          )
         clojure.walk
-        clojure.contrib.pprint
-        clojure.contrib.trace
+        clojure.contrib.fcase
         hiccup.core
         compojure.core)
   (:require [clojure.zip :as zip]))
@@ -186,7 +185,7 @@ anonymous function binding all the helper
 variables"
   [sf]
   `(fn [request#]
-     (let [routes# ~'routes*] ;; create local clojure for routing info
+     (let [routes# routes*] ;; create local clojure for routing info
        (binding [r* request#
                  s* (:session request#)
                  p* (:params request#)
@@ -220,17 +219,15 @@ variables"
 ;; named by prefix - path - name 
 (defn- sf->defn
   "transforms sf to defn"
-  [prefix sf route-map]
+  [prefix sf]
   `(def ~(sf->function-name prefix sf)
-            (let [~'routes* ~route-map]
-              ~(sf->fn sf))))
+        ~(sf->fn sf)))
 
 (defn- vsf->defn
   "returns a vector of defn's from a vsf"
   [prefix vsf]
-  (let [route-map (vsf->route-map prefix vsf)]
-    (for [sf vsf]
-      (sf->defn prefix sf route-map))))
+  (for [sf vsf]
+    (sf->defn prefix sf)))
 
 (defn- wrap-root-block
   "wrappes a root-block inside a block
@@ -275,13 +272,13 @@ code to cope with this unneeded prefix"
                  (vsf:block->vsf:fn-call) ;; implode blocks to funcalls
                  )]
     `(do
+      (let [~'routes* ~(vsf->route-map url-prefix vsf)]
        ;; generate functions for partials
-       ~@(vsf->defn func-prefix vsf)
+       ~@(vsf->defn func-prefix vsf))
 
-       ;; generate any routes for functions
-       (def ~func-prefix
-            ~(vsf->any-routes vsf func-prefix url-prefix))))
-  )
+      ;; generate any routes for functions
+      (def ~func-prefix
+           ~(vsf->any-routes vsf func-prefix url-prefix)))))
 
 (defmacro defblock
   "to define a block which can get expanded in a
