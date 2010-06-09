@@ -1,6 +1,5 @@
 (ns clocks.core
   (:use 
-        clojure.contrib.fcase
         clojure.contrib.trace
         hiccup.core
         compojure.core
@@ -172,7 +171,7 @@ definition"
   [sf]
   (= (:name sf) *sf-root-name*))
 
-(defn vsf->any-routes
+(defn- vsf->any-routes
   "generates any routes for a vsf"
   [vsf func-prefix url-prefix]
   (for [sf vsf]
@@ -185,13 +184,16 @@ remove since we don't have to introduce cases in our
 code to cope with this unneeded prefix"
   (map #(assoc % :path (rest (:path %))) vsf))
 
-(defn walk-symbol->str [t]
+(defn- walk-symbol->str [t]
+  "prewalker transforming all encountered
+symbols to strings"
   (prewalk (fn [f] (if (symbol? f)
                      (str f)
-                     f)) t)
-  )
+                     f)) t))
 
-(defn vsf->mexpandable-vsf [vsf]
+(defn- vsf->mexpandable-vsf [vsf]
+  "make vsf ready to be macroexpad, need to suse
+  this is needed in defpage"
   (walk-symbol->str (map #(assoc % :body nil :path (vec (:path %))) vsf)))
 
 ;; API
