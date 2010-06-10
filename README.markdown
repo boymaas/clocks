@@ -1,27 +1,11 @@
-# CLOCKS DEFINES A WEBDSL ON TOP OF COMPOJURE
+# Clocks defines a webdsl on top of compojure
 
 Implementation of a webdsl on top op compojure, uses ring, compojure and scriptjure as
 serverside foundation, and jquery on the clientside.
 
-Abstracts away some of the tedious boilerplate we all hate so much.
+Abstracts away most of the dependencies and most of the tedious boilerplate we all hate so much. 
 
 ## Usage
-
-Clocks exports a new route parameter called `PAGE` which can be used to set a prefix. For example:
-
-       (PAGE "/" index)
-
-Which will generate all the routes neccessary to render all individual blocks of code.
-
-## Description
-
-`defpage` can be used to generate a page in which
-blocks can be accessed independitly from the rest of the system.
-
-This is implemented by scanning the source for special forms.
-
-`block` indicates a piece of code which can be accessed via a seperate route.
-these routes are defined by their path in the tree seperated by dots
 
     (defblock my-reusable-interactive-block [param1 param2 param3 ...]
         ..code.. )
@@ -38,6 +22,22 @@ these routes are defined by their path in the tree seperated by dots
     (defroutes example
        (PAGE "/ajax-page" my-interactive-page))
 
+`defpage` can be used to generate a page in which
+blocks can be accessed independitly from the rest of the system.
+
+This is implemented by scanning the source for special forms.
+
+`block` indicates a piece of code which can be accessed via a seperate route.
+these routes are defined by their path in the tree seperated by dots
+
+`PAGE` clocks exports a new route parameter for clojure called `PAGE` which 
+can be used to set a route to the page. For example:
+
+       (PAGE "/" index)
+
+Which will generate all the routes neccessary to render all individual blocks of code.
+
+
 Routes and seperate functions are created to seperate blocks of functionality.
 In this case level3 can be reached by sending a request to:
 
@@ -45,7 +45,7 @@ In this case level3 can be reached by sending a request to:
 
 and the complete page render at:
  
-   /ajax-page
+    /ajax-page
 
 ## Javascript and javascript macro's
 
