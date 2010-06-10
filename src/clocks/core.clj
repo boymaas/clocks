@@ -125,6 +125,12 @@ request params"
   `(let [{:strs ~(vec params)} ~'p*]
     ~@body))
 
+(defn- wrap-page
+  "wraps on page level"
+  [name params body]
+  `(let [{:strs ~(vec params)} ~'p*]
+     (html ~@body)))
+
 
 (defn- sf->fn
   "closes route information inside an
@@ -132,17 +138,13 @@ anonymous function binding all the helper
 variables"
   [sf]
   `(fn [~'uri-prefix* request#]
-     (binding [r* request#
-               s* (:session request#)
-               p* (:params request#)
-               routes* (prepend-uri-prefix ~'uri-prefix* ~'page-route-map*) 
-
-               method* (:method request#)]
+     (binding [routes* (prepend-uri-prefix ~'uri-prefix* ~'page-route-map*)]
 
        ~(let [{:keys [type name params body]} sf]
           (case type
-                'json (wrap-json name params body)
+                'page (wrap-page name params body)
                 'block (wrap-block name params body)
+                'json (wrap-json name params body)
                 (throw (Exception. (str "Unknown type to wrap: " type) )))))))
 
 ;; macro expand to individual functions
@@ -164,7 +166,7 @@ variables"
 enabling the tree-walker to include the root
 definition"
   [name body params]
-  `(~'block ~name ~params ~@body))
+  `(~'page ~name ~params ~@body))
 
 (defn- sf-root?
   "checks if it is a root-block by its name"
@@ -175,7 +177,7 @@ definition"
   "generates any routes for a vsf"
   [vsf func-prefix url-prefix]
   (for [sf vsf]
-    `(ANY ~(sf->abs-uri sf url-prefix) [] (partial ~(sf->function-name func-prefix sf) ~url-prefix))))
+    `(ANY ~(sf->abs-uri sf url-prefix) [] (wrap-request-bindings ~(sf->function-name func-prefix sf) ~url-prefix))))
 
 (defn- unwrap-root-path [vsf]
   "since we wrap a block around a page-block
@@ -199,10 +201,11 @@ symbols to strings"
 ;; API
 (defmacro defpage
   "to define a page"
-  [func-prefix & body]
+  [func-prefix params & body]
   (assert (symbol? func-prefix))
+  (assert (vector? params))
   (let [vsf:block->vsf:fn-call (partial vsf:block->vsf:fn-call func-prefix)
-        vsf (-> (wrap-root-block *sf-root-name* body []) 
+        vsf (-> (wrap-root-block *sf-root-name* body params) 
                 (body->expanded-body)     ;; expand callblocks
                 (body->vsf)              ;; extract sf
                 (unwrap-root-path)       ;; remove wrapped from path
@@ -216,6 +219,16 @@ symbols to strings"
        ;; generate any routes for functions
        (def ~func-prefix {:vsf ~(vec (vsf->mexpandable-vsf vsf))
                           :func-prefix ~(str func-prefix)}))))
+
+(defn wrap-request-bindings 
+  "wraps around needed bindings"
+  [handler prefix]
+  (fn [request]
+     (binding [r* request
+               s* (:session request)
+               p* (:params request)
+               method* (:method request)]
+       (handler prefix request))))
 
 (defmacro PAGE [url-prefix page]
   (assert (string? url-prefix))

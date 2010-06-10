@@ -46,7 +46,7 @@ For complete example see `examples/login.clj`.
                      ($id-reload :login-form-fields {:email (. Math random)})
                      (return false))))
 
-    (defroutes-page index "index"
+    (defpage index "index"
       [:html
        [:head
         (include-js "/jquery-1.4.2.min.js")]
@@ -74,9 +74,17 @@ For complete example see `examples/login.clj`.
                               (. event preventDefault)
                               (return false)))))
 
+## Active at your routes
+
+Clocks exports a new route parameter called `PAGE` which can be used to set a prefix. For example:
+
+       (PAGE "/" index)
+
+Which will generate all the routes neccessary to render all individual blocks of code.
+
 ## Description
 
-`defroutes-page` can be used to generate a page in which
+`defpage` can be used to generate a page in which
 blocks can be accessed independitly from the rest of the system.
 
 This is implemented by scanning the source for special forms.
@@ -131,24 +139,15 @@ A short explanation of the implementations:
    the path into the code.
 
 2. *generate functions and routes*
-   seperate functions are defined with a prefix so the namespace doesn't get polluted.
-   and routes are generated.
+   seperate functions are defined with a standard prefix so the namespace doesn't get polluted.
 
-## EVALUATION CONTEXT / BINDINGS
+3. *generate routes*
+   `(PAGE "route" page-id)` macro generates all the routes needed for the seperate blocks.
 
-Blocks get transformed to anonymous functions with the following thread-local bindings, 
-all with a * postfix: 
-
-    (binding [r* request#                     ;; request
-            s* (:session request#)          ;; session if available
-            p* (:params request#)           ;; params
-            routes* routes#                 ;; routes inside page
-            method* (:method request#)]     ;; method of request
-
-            ...block code... )
-
-These bindings are present for helper functions. Such as `block-uri` which looks up
-the uri of the block by name.
+4. *per block session and parameter wrapping* special vars are introduced for the blocks and
+   helper functions. Binding is done over the called block. Extra bindings can be provided
+   wrapping the routes as usual using a ring handler. 
+   `r* s* p* method* routes*`
 
 # Licence
 

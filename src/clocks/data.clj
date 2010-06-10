@@ -56,7 +56,8 @@ indexed by name"
        (= (first s) name)))
 
 (defn is-block? [s]
-  (symbol-and-eq? s 'block))
+  (or  (symbol-and-eq? s 'block)
+       (symbol-and-eq? s 'page)))
 
 (defn is-callblock? [s]
   (symbol-and-eq? s 'callblock))
