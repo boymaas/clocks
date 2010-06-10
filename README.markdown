@@ -3,7 +3,93 @@
 Implementation of a webdsl on top op compojure, uses ring, compojure and scriptjure as
 serverside foundation, and jquery on the clientside.
 
+Abstracts away some of the tedious boilerplate we all hate so much.
+
 ## Usage
+
+Clocks exports a new route parameter called `PAGE` which can be used to set a prefix. For example:
+
+       (PAGE "/" index)
+
+Which will generate all the routes neccessary to render all individual blocks of code.
+
+## Description
+
+`defpage` can be used to generate a page in which
+blocks can be accessed independitly from the rest of the system.
+
+This is implemented by scanning the source for special forms.
+
+`block` indicates a piece of code which can be accessed via a seperate route.
+these routes are defined by their path in the tree seperated by dots
+
+    (defblock my-reusable-interactive-block [param1 param2 param3 ...]
+        ..code.. )
+
+    (defpage my-interactive-page [param1 param2]
+        [:html (block level1 []
+               ..code...
+               (blcok level2 []
+                      ..code..
+                      (block level3 []
+                             ...code..
+                             (callblock :my-reusable-interactive-block local-name-of-block))))
+
+    (defroutes example
+       (PAGE "/ajax-page" my-interactive-page))
+
+Routes and seperate functions are created to seperate blocks of functionality.
+In this case level3 can be reached by sending a request to:
+
+    /ajax-page.level1.level2.level3
+
+and the complete page render at:
+ 
+   /ajax-page
+
+## Javascript and javascript macro's
+
+See for more information `clocks/defjs` and `clocks/jquery`.
+
+    ($id-on-event :login-form-email keyup
+                 ($id-reload :validate {:email ($id-value :login-form-email)}))
+
+## REUSABLE BLOCKS
+
+Reusable blocks can be defined by `defblock`. These can be called with `callblock` from whithin
+a page.
+
+    (defblock name [params] ...)
+
+These are called from withing a page using 
+
+    (callblock name var-pointing-to-predefined-block)
+
+# IMPLEMENTATION 
+
+A short explanation of the implementations:
+
+0. *expand callblock*
+   for now all callblocks get expanded first, so the tree walker automaticly finds the correct
+   paths and can create a function of them.
+
+1. *extract special forms & register routes*
+   code traverses the tree finding the special forms, currently `block` and `callblock`
+   and stores them into a vector capturing all relevant informaiton including
+   the path into the code.
+
+2. *generate functions and routes*
+   seperate functions are defined with a standard prefix so the namespace doesn't get polluted.
+
+3. *generate routes*
+   `(PAGE "route" page-id)` macro generates all the routes needed for the seperate blocks.
+
+4. *per block session and parameter wrapping* special vars are introduced for the blocks and
+   helper functions. Binding is done over the called block. Extra bindings can be provided
+   wrapping the routes as usual using a ring handler. 
+   `r* s* p* method* routes*`
+
+# Larger example
 
 For complete example see `examples/login.clj`.
 
@@ -46,7 +132,7 @@ For complete example see `examples/login.clj`.
                      ($id-reload :login-form-fields {:email (. Math random)})
                      (return false))))
 
-    (defpage index "index"
+    (defpage index []
       [:html
        [:head
         (include-js "/jquery-1.4.2.min.js")]
@@ -74,80 +160,6 @@ For complete example see `examples/login.clj`.
                               (. event preventDefault)
                               (return false)))))
 
-## Active at your routes
-
-Clocks exports a new route parameter called `PAGE` which can be used to set a prefix. For example:
-
-       (PAGE "/" index)
-
-Which will generate all the routes neccessary to render all individual blocks of code.
-
-## Description
-
-`defpage` can be used to generate a page in which
-blocks can be accessed independitly from the rest of the system.
-
-This is implemented by scanning the source for special forms.
-
-`block` indicates a piece of code which can be accessed via a seperate route.
-these routes are defined by their path in the tree seperated by dots
-
-    (defroutes-page name prefix
-        [:html (block level1 []
-               ..code...
-               (blcok level2 []
-                      ..code..
-                      (block level3 []
-                             ...code..))))
-
-In this case level3 can be reached by sending a request to:
-
-    prefix.level1.level2.level3
-
-It will only render the ..code... part of block3.
-
-## Javascript and javascript macro's
-
-See for more information `clocks/defjs` and `clocks/jquery`.
-
-    ($id-on-event :login-form-email keyup
-                 ($id-reload :validate {:email ($id-value :login-form-email)}))
-
-
-## REUSABLE BLOCKS
-
-Reusable blocks can be defined by `defblock`. These can be called with `callblock` from whithin
-a page.
-
-    (defblock name [params] ...)
-
-These are called from withing a page using 
-
-    (callblock name var-pointing-to-predefined-block)
-
-# IMPLEMENTATION 
-
-A short explanation of the implementations:
-
-0. *expand callblock*
-   for now all callblocks get expanded first, so the tree walker automaticly finds the correct
-   paths and can create a function of them.
-
-1. *extract special forms & register routes*
-   code traverses the tree finding the special forms, currently `block` and `callblock`
-   and stores them into a vector capturing all relevant informaiton including
-   the path into the code.
-
-2. *generate functions and routes*
-   seperate functions are defined with a standard prefix so the namespace doesn't get polluted.
-
-3. *generate routes*
-   `(PAGE "route" page-id)` macro generates all the routes needed for the seperate blocks.
-
-4. *per block session and parameter wrapping* special vars are introduced for the blocks and
-   helper functions. Binding is done over the called block. Extra bindings can be provided
-   wrapping the routes as usual using a ring handler. 
-   `r* s* p* method* routes*`
 
 # Licence
 
