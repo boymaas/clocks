@@ -83,13 +83,12 @@
   "extracts body blocks out of code tree"
   ([body] (body->vsf body []))
   ([body path]
-      (binding [*accumulator* []]
+     (binding [*accumulator* (atom  [])]
         (walker is-block? (fn [p b]
-                  (set! *accumulator* (conj *accumulator*
-                                            (block->special-form b p)))
+                  (swap! *accumulator* conj (block->special-form b p))
                   b)
                 [] body)
-        *accumulator*)))
+        @*accumulator*)))
 
 ;; parse individual blocks and transform block
 ;; definition to named - callblocks calling to be generated functions
@@ -164,6 +163,13 @@ variables"
   [prefix vsf]
   (for [sf vsf]
     (sf->defn prefix sf)))
+
+(defn- body->block
+  "wrappes a root-block inside a block
+enabling the tree-walker to include the root
+definition"
+  [name body params]
+  `(~'block ~name ~params ~@body))
 
 (defn- wrap-root-block
   "wrappes a root-block inside a block
@@ -258,7 +264,7 @@ defroutes-page, name will be stored in *defblock-registry* for the expander"
   [func-prefix params & body]
   (assert (symbol? func-prefix))
   (assert (vector? params))
-  (let [wrapped-body (wrap-root-block func-prefix body params)]
+  (let [wrapped-body (body->block func-prefix body params)]
     (alter-var-root #'*defblock-registry* #(assoc % (keyword func-prefix) (block->special-form wrapped-body [])))
     nil))
 

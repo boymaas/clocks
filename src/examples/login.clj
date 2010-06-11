@@ -29,7 +29,6 @@
          (clocks-session-put! :counter
                               (inc (clocks-session-get :counter 1)))) 
 
-  
   (block validate [email]
          [:h2 email]
          (if (not= email "boy")
