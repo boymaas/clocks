@@ -17,7 +17,7 @@
 
 ;; the to be bound variables
 ;; for usage in helper functions
-(declare r* s* p* method* routes* in-page*)
+(declare r* s* p* method* routes* in-page* func-name* func-uri*)
 
 ;; registry for defined blocks
 ;; defined blocks will get expaned inside
@@ -113,10 +113,9 @@ to a direct function call"
 to output a html request and preparses
 request params"
   [name params body]
-  `(html
-    [~(keyword (str "div#" (str name)))
-     (let [{:strs ~(vec params)} ~'p*]
-       (html ~@body))]))
+  `(let [{:strs ~(vec params)} ~'p*]
+      [~(keyword (str "div#" (str name)))
+       ~@body]))
 
 (defn- wrap-json
   "wraps a block into a form able
@@ -129,8 +128,12 @@ request params"
 (defn- wrap-page
   "wraps on page level"
   [name params body]
+  ;; needs to return map otherwise html
+  ;; rendering will not function
+  ;; also one element otherwise only last will be
+  ;; displayers
   `(let [{:strs ~(vec params)} ~'p*]
-     (html ~@body)))
+     ~@body))
 
 
 (defn- sf->fn
@@ -207,6 +210,7 @@ symbols to strings"
   [func-prefix params & body]
   (assert (symbol? func-prefix))
   (assert (vector? params))
+  (assert (= (count body) 1))
   (let [vsf:block->vsf:fn-call (partial vsf:block->vsf:fn-call func-prefix)
         vsf (-> (wrap-root-block *sf-root-name* body params) 
                 (body->expanded-body)     ;; expand callblocks
@@ -232,10 +236,12 @@ symbols to strings"
         (binding [r* request
                   s* (atom (or (:session request) {}))
                   p* (:params request)
+                  func-name* func-name
+                  func-uri* func-uri
                   method* (:method request)]
           (prn func-name func-uri)
           ;; using compojures.response/render
-          (let [response (render {} (handler prefix request))]
+          (let [response (render {}  (html (handler prefix request)))]
             ;; setting updated or not session in repsonse
             ;; so ring handler can update
             (assoc response :session @s*))))))
@@ -262,6 +268,11 @@ defroutes-page, name will be stored in *defblock-registry* for the expander"
   [block-name]
   (assert (keyword? block-name))
  (routes* block-name))
+
+(defn clocks-uri-this
+  "returns the uri of containing block"
+  []
+  func-uri*)
 
 ;; sesison hellpers
 (defn clocks-session-put! [k v]

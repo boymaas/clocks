@@ -29,6 +29,7 @@
          (clocks-session-put! :counter
                               (inc (clocks-session-get :counter 1)))) 
 
+  
   (block validate [email]
          [:h2 email]
          (if (not= email "boy")
@@ -57,46 +58,56 @@
                  ($id-reload :login-form-fields {:email (. Math random)})
                  (return false))))
 
-(defpage testpage [email] 
-  [:html
-   [:head]
-   [:body
-    [:h1 email]
-    (block comment [txt]
-           [:p (or  txt "No text supplied")])]])
-
 
 (defpage index []
   [:html
    [:head
     (include-js "/jquery-1.4.2.min.js")]
-   (block level1 [] ;; todo check on vector
-          [:h1 "Clocks example"]
-          [:h2 (clocks-uri :level1)]
+   [:body 
+    (block level1 [] ;; todo check on vector
+           [:h1 "Clocks example"]
+           [:h2 (clocks-uri :level1)]
 
-          ;; expands :login-form defined block here ..
-          (callblock :login-form login-form)
+           ;; expands :login-form defined block here ..
+           (callblock :login-form login-form)
 
-          ;; print defined routes in this page
-          (block level2 []
-                 [:ol (for [[k v] routes*]
-                        [:li k "-->" [:a.pol {:href v} v]])]))
+           ;; print defined routes in this page
+           (block level2 []
+                  [:ol (for [[k v] routes*]
+                         [:li k "-->" [:a.pol {:href v} v]])]))
 
-   (block page-output []
-          "page output")]
+    (block page-output []
+           "page output")
 
   ;; do some jquery to load different blocks inside
   ;; the page-output block
-  ($defjs
-   (. ($ "a.pol") click (fn [event]
-                          (var url this.href)
-                          (. ($ "#page-output") load url)
-                          (. event preventDefault)
-                          (return false)))))
+    ($defjs
+     (. ($ "a.pol") click (fn [event]
+                            (var url this.href)
+                            (. ($ "#page-output") load url)
+                            (. event preventDefault)
+                            (return false))))]])
+
+(defpage testpage [email] 
+  [:html
+   [:head]
+   [:body
+    [:h1 email]
+    (block leve0 []
+           (block level1 []
+                  (block session []
+                         [:h2 (clocks-uri-this)]
+                         [:pre (pprint s*)
+                          (prn "Hello")
+                          (clocks-session-put! :counter
+                                               (inc (clocks-session-get :counter 1)))]))) 
+    ]])
+
 
 ;; define example servlet
-(defroutes example
-  (PAGE "/login" index))
+  (defroutes example
+    (PAGE "/login" index)
+    (PAGE "/test" testpage))
 
 (defn wrap-debug-log [handler]
   (fn [r]

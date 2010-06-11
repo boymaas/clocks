@@ -29,5 +29,5 @@
   `($id-call ~id ~'val))
 
 (defjs-macro $id-reload [id & params]
-  `($id-call ~id ~'load (clj (block-uri ~id)) ~@params))
+  `($id-call ~id ~'load (clj (clocks-uri ~id)) ~@params))
 
