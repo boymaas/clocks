@@ -3,8 +3,10 @@
   (:use compojure.core
         (ring.middleware session file)
         ring.adapter.jetty
+        clojure.pprint
         clocks.core
         clocks.defjs
+        clojure.test
         clocks.jquery
         [clojure.contrib.duck-streams :only (append-spit)]
         hiccup.core
@@ -20,6 +22,12 @@
    [:button {:id :login-form-submit}]] 
 
   [:div#login-form-messages]
+
+  (block session []
+         [:pre (pprint s*)]
+         (prn "Hello")
+         (clocks-session-put! :counter
+                              (inc (clocks-session-get :counter 1)))) 
 
   (block validate [email]
          [:h2 email]
@@ -64,7 +72,7 @@
     (include-js "/jquery-1.4.2.min.js")]
    (block level1 [] ;; todo check on vector
           [:h1 "Clocks example"]
-          [:h2 (block-uri :level1)]
+          [:h2 (clocks-uri :level1)]
 
           ;; expands :login-form defined block here ..
           (callblock :login-form login-form)
@@ -109,3 +117,11 @@
   ([] (start-server 8080))
   ([port]
      (thread (fn [] (run-jetty (var example) {:port port})))))
+
+(defmacro is-not [& body]
+  `(is (not ~@body)))
+
+(deftest test-page-index
+  (is-not (empty? ((wrap-request-bindings clpartial-index "/") {}))))
+
+(test-page-index)

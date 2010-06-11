@@ -3,6 +3,7 @@
         clojure.contrib.trace
         hiccup.core
         compojure.core
+        compojure.response
         clojure.walk
         clocks.data))
      
@@ -177,7 +178,9 @@ definition"
   "generates any routes for a vsf"
   [vsf func-prefix url-prefix]
   (for [sf vsf]
-    `(ANY ~(sf->abs-uri sf url-prefix) [] (wrap-request-bindings ~(sf->function-name func-prefix sf) ~url-prefix))))
+    (let [func-name (sf->function-name func-prefix sf)
+          func-uri (sf->abs-uri sf url-prefix)]
+      `(ANY ~func-uri [] (wrap-request-bindings ~func-name ~url-prefix ~(str func-name) ~(str func-uri))))))
 
 (defn- unwrap-root-path [vsf]
   "since we wrap a block around a page-block
@@ -222,13 +225,20 @@ symbols to strings"
 
 (defn wrap-request-bindings 
   "wraps around needed bindings"
-  [handler prefix]
-  (fn [request]
-     (binding [r* request
-               s* (:session request)
-               p* (:params request)
-               method* (:method request)]
-       (handler prefix request))))
+  ([handler prefix]
+     (wrap-request-bindings handler prefix "*unknown*" "*unknown*"))
+  ([handler prefix func-name func-uri]
+      (fn [request]
+        (binding [r* request
+                  s* (atom (or (:session request) {}))
+                  p* (:params request)
+                  method* (:method request)]
+          (prn func-name func-uri)
+          ;; using compojures.response/render
+          (let [response (render {} (handler prefix request))]
+            ;; setting updated or not session in repsonse
+            ;; so ring handler can update
+            (assoc response :session @s*))))))
 
 (defmacro PAGE [url-prefix page]
   (assert (string? url-prefix))
@@ -247,9 +257,18 @@ defroutes-page, name will be stored in *defblock-registry* for the expander"
     nil))
 
 ;; finds uri for block
-(defn block-uri
+(defn clocks-uri
   "helper function to find the uri by block name"
   [block-name]
   (assert (keyword? block-name))
  (routes* block-name))
 
+;; sesison hellpers
+(defn clocks-session-put! [k v]
+  (swap! s* (fn [a b] (merge a {k b})) v))
+
+(defn clocks-session-get
+  ([k] (clocks-session-get k nil))
+  ([k default] (if (vector? k)
+                 (get-in @s* k)
+                 (get @s* k default))))
