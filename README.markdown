@@ -1,11 +1,12 @@
 # Clocks defines a webdsl on top of compojure
 
-Implementation of a webdsl on top op compojure, uses ring, compojure and scriptjure as
-serverside foundation, and jquery on the clientside.
+Implementation of a webdsl on top op compojure/ring and scriptjure as
+serverside foundation, jquery can be used on the client side.
 
-Abstracts away most of the dependencies and most of the tedious boilerplate we all hate so much. 
+Goal is to abstracts away most of the dependencies and tedious boilerplate we all hate so much. 
 
 ## Usage
+    (use 'clocks.core)
 
     (defblock my-reusable-interactive-block [param1 param2 param3 ...]
         ..code.. )
@@ -22,30 +23,42 @@ Abstracts away most of the dependencies and most of the tedious boilerplate we a
     (defroutes example
        (PAGE "/ajax-page" my-interactive-page))
 
-`defpage` can be used to generate a page in which
-blocks can be accessed independitly from the rest of the system.
+This definition will generate routes to all defined blocks.
 
-This is implemented by scanning the source for special forms.
+    /ajax-page.level1.level2.level3 --will-render--> level3
+
+and the complete page render at:
+ 
+    /ajax-page --will-render--> ajax-page
+
+## API
+
+`defpage` can be used to generate a page in which
+`blocks` can be accessed independitly from the rest of the system.
 
 `block` indicates a piece of code which can be accessed via a seperate route.
 these routes are defined by their path in the tree seperated by dots
 
-`PAGE` clocks exports a new route parameter for clojure called `PAGE` which 
-can be used to set a route to the page. For example:
+`PAGE` a new route parameter for compojure.
 
        (PAGE "/" index)
 
-Which will generate all the routes neccessary to render all individual blocks of code.
+This will generate all the routes neccessary to be able to render all individual defined blocks
+individually.
 
 
-Routes and seperate functions are created to seperate blocks of functionality.
-In this case level3 can be reached by sending a request to:
+## Helpers
 
-    /ajax-page.level1.level2.level3
+### Statefull session
 
-and the complete page render at:
- 
-    /ajax-page
+`clocks-session-get` and `clocks-session-put!` can be used to update session information. 
+
+### Routing
+
+`clocks-uri :name` will find the uri to render a certain block.
+`clocks-uri-this` will return the uri of the "lexical" block.
+
+The uri of the block which is executed is in the request uri ... 
 
 ## Javascript and javascript macro's
 
@@ -65,7 +78,7 @@ These are called from withing a page using
 
     (callblock name var-pointing-to-predefined-block)
 
-# IMPLEMENTATION 
+## IMPLEMENTATION 
 
 A short explanation of the implementations:
 
