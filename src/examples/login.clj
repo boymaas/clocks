@@ -131,7 +131,8 @@
 (defmacro is-not [& body]
   `(is (not ~@body)))
 
+
 (deftest test-page-index
-  (is-not (empty? ((wrap-request-bindings clpartial-index "/") {}))))
+  (is-not (empty? (callpartial-params index {}))))
 
 (test-page-index)

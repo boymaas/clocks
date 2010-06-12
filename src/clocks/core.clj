@@ -5,8 +5,8 @@
         compojure.core
         compojure.response
         clojure.walk
-        clocks.data))
-     
+        clocks.data
+        clocks.md5))
 (comment
   sf    spefical form eg. callblock block
   vsf   vector special form
@@ -106,15 +106,15 @@ to a direct function call"
                               [] (:body sf))))))
 
 ;; WRAPPING
-
 (defn- wrap-block 
   "wraps a block into a form able
 to output a html request and preparses
 request params"
   [name params body]
   `(let [{:strs ~(vec params)} ~'p*]
-      [~(keyword (str "div#" (str name)))
-       ~@body]))
+     ;; [:div#id]
+     [~(keyword (str "div#" (str name)))
+      ~@body]))
 
 (defn- wrap-json
   "wraps a block into a form able
@@ -122,15 +122,13 @@ to output a json request and preparses
 request params"
   [name params body]
   `(let [{:strs ~(vec params)} ~'p*]
-    ~@body))
+     ~@body))
 
 (defn- wrap-page
   "wraps on page level"
   [name params body]
-  ;; needs to return map otherwise html
-  ;; rendering will not function
-  ;; also one element otherwise only last will be
-  ;; displayers
+  ;; one element map
+  ;; cannot nest hiccup html elements, see doc
   `(let [{:strs ~(vec params)} ~'p*]
      ~@body))
 
@@ -168,46 +166,44 @@ variables"
   "wrappes a root-block inside a block
 enabling the tree-walker to include the root
 definition"
-  [name body params]
-  `(~'block ~name ~params ~@body))
+  [type name body params]
+  `(~(symbol type) ~name ~params ~@body))
 
-(defn- wrap-root-block
-  "wrappes a root-block inside a block
-enabling the tree-walker to include the root
-definition"
-  [name body params]
-  `(~'page ~name ~params ~@body))
-
-(defn- sf-root?
-  "checks if it is a root-block by its name"
-  [sf]
-  (= (:name sf) *sf-root-name*))
+(def wrap-root-block (partial body->block 'page))
 
 (defn- vsf->any-routes
   "generates any routes for a vsf"
   [vsf func-prefix url-prefix]
-  (for [sf vsf]
+  ;; build routes most specific first
+  (for [sf (sort (fn [sfa sfb] (- (count (sfb :path))
+                                  (count (sfa :path)))) vsf)]
     (let [func-name (sf->function-name func-prefix sf)
           func-uri (sf->abs-uri sf url-prefix)]
-      `(ANY ~func-uri [] (wrap-request-bindings ~func-name ~url-prefix ~(str func-name) ~(str func-uri))))))
+      `(ANY ~func-uri [] (wrap-request-bindings ~func-name           ;; partial function name
+                                                ~url-prefix          ;; url prefix
+                                                ~(str func-name)     ;; for block self-awareness
+                                                ~(str func-uri)))))) ;; for block self-awareness
 
-(defn- unwrap-root-path [vsf]
+(defn- unwrap-root-path
   "since we wrap a block around a page-block
 we have an extra level in our path which we
 remove since we don't have to introduce cases in our
 code to cope with this unneeded prefix"
+  [vsf]
   (map #(assoc % :path (rest (:path %))) vsf))
 
-(defn- walk-symbol->str [t]
+(defn- walk-symbol->str
   "prewalker transforming all encountered
 symbols to strings"
+  [t]
   (prewalk (fn [f] (if (symbol? f)
                      (str f)
                      f)) t))
 
-(defn- vsf->mexpandable-vsf [vsf]
-  "make vsf ready to be macroexpad, need to suse
+(defn- vsf->mexpandable-vsf 
+  "make vsf ready to be macroexpanded, need to suse
   this is needed in defpage"
+  [vsf]
   (walk-symbol->str (map #(assoc % :body nil :path (vec (:path %))) vsf)))
 
 ;; API
@@ -245,14 +241,17 @@ symbols to strings"
                   func-name* func-name
                   func-uri* func-uri
                   method* (:method request)]
-          (prn func-name func-uri)
           ;; using compojures.response/render
           (let [response (render {}  (html (handler prefix request)))]
             ;; setting updated or not session in repsonse
             ;; so ring handler can update
             (assoc response :session @s*))))))
 
-(defmacro PAGE [url-prefix page]
+(defmacro PAGE
+  "Connects the clocks world to compojures world.
+  (defroutes (PAGE uri page-def)) will generate
+  any routes of all defined blocks"
+  [url-prefix page]
   (assert (string? url-prefix))
   (assert (symbol? page))
   (let [page (var-get (resolve page))]
@@ -264,7 +263,7 @@ defroutes-page, name will be stored in *defblock-registry* for the expander"
   [func-prefix params & body]
   (assert (symbol? func-prefix))
   (assert (vector? params))
-  (let [wrapped-body (body->block func-prefix body params)]
+  (let [wrapped-body (body->block 'block func-prefix body params)]
     (alter-var-root #'*defblock-registry* #(assoc % (keyword func-prefix) (block->special-form wrapped-body [])))
     nil))
 
@@ -289,3 +288,18 @@ defroutes-page, name will be stored in *defblock-registry* for the expander"
   ([k default] (if (vector? k)
                  (get-in @s* k)
                  (get @s* k default))))
+
+;; functions to ease testing
+;; TODO: move to seperate ns
+(defn callpartial
+  "calls a partial"
+  [url-prefix name request]
+  `(let [response# ((wrap-request-bindings
+                   ~(resolve (symbol (str  "clpartial-" name))) ~url-prefix) ;; name of partial
+                  ~request)]
+     (assoc response# :body-md5 (subs (md5-sum (response# :body)) 0 4)))) ;; in request format
+
+(defn md5= [md5:0-4 response]
+     (= md5:0-4 (:body-md5 response)))
+
+(defmacro cp-params [up n & p] (callpartial up n {:params (apply hash-map p)}))
