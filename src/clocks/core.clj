@@ -302,4 +302,9 @@ defroutes-page, name will be stored in *defblock-registry* for the expander"
 (defn md5= [md5:0-4 response]
      (= md5:0-4 (:body-md5 response)))
 
-(defmacro cp-params [up n & p] (callpartial up n {:params (apply hash-map p)}))
+(defmacro cp-params
+  "Utility function for calling partial with params
+   params can be specified as keywords they will be 
+   converted to strings"
+  [up n & p]
+  (callpartial up n {:params (stringify-keys (apply hash-map p))}))
