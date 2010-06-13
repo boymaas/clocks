@@ -43,7 +43,7 @@
     with return value of provided function"
   [filter? f path b]
   (let [path (if (filter? b)
-               (conj path (subs  (str (block-name b)) 1))
+               (conj path (block-name b))
                path)
         walker* (partial walker filter? f path)]
     ;; define new function
@@ -223,7 +223,6 @@ symbols to strings"
   (assert (symbol? func-prefix))
   (assert (vector? params))
   (assert (= (count body) 1))
-  (trace body)
   (let [body (macroexpand-all-except-blocks body)
         vsf:block->vsf:fn-call (partial vsf:block->vsf:fn-call func-prefix)
         vsf (-> (wrap-root-block *sf-root-name* body params) 
@@ -251,7 +250,7 @@ symbols to strings"
     ;; expand to block by finding the element form
     ;; the registry and expanding it so the code scanner can
     ;; create all the routes etc ...
-    (special-form->block (assoc (*defblock-registry* block-id) :name label))) 
+    (special-form->block (assoc (*defblock-registry* block-id) :name (subs (str label) 1)))) 
   )
 
 (declare block)
@@ -288,7 +287,7 @@ symbols to strings"
   "to define a block which can get expanded in a
 defroutes-page, name will be stored in *defblock-registry* for the expander"
   [func-prefix params & body]
-  (assert (keyword? func-prefix))
+  (assert (symbol? func-prefix))
   (assert (vector? params))
   (let [wrapped-body (body->block 'block func-prefix body params)]
     (alter-var-root #'*defblock-registry* #(assoc % (keyword func-prefix) (block->special-form wrapped-body [])))
