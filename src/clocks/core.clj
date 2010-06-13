@@ -43,7 +43,7 @@
     with return value of provided function"
   [filter? f path b]
   (let [path (if (filter? b)
-               (conj path (block-name b))
+               (conj path (subs  (str (block-name b)) 1))
                path)
         walker* (partial walker filter? f path)]
     ;; define new function
@@ -68,7 +68,7 @@
               ;; find name in registry
               ;; expand form
               (if (not (contains? *defblock-registry* block-id))
-                (format  "Trying to call a nonexistsent body: (%s)" block-id)
+                (format  "Trying to call a nonexistsent block: (%s)" block-id)
                 ;; expand to block by finding the element form
                 ;; the registry and expanding it so the code scanner can
                 ;; create all the routes etc ...
@@ -179,7 +179,7 @@ definition"
                                   (count (sfa :path)))) vsf)]
     (let [func-name (sf->function-name func-prefix sf)
           func-uri (sf->abs-uri sf url-prefix)]
-      `(ANY ~func-uri [] (wrap-request-bindings ~func-name           ;; partial function name
+      `(ANY ~func-uri [] (wrap-request-bindings ~(:func-ref sf)      ;; partial function ref
                                                 ~url-prefix          ;; url prefix
                                                 ~(str func-name)     ;; for block self-awareness
                                                 ~(str func-uri)))))) ;; for block self-awareness
@@ -203,19 +203,31 @@ symbols to strings"
 (defn- vsf->mexpandable-vsf 
   "make vsf ready to be macroexpanded, need to suse
   this is needed in defpage"
-  [vsf]
-  (walk-symbol->str (map #(assoc % :body nil :path (vec (:path %))) vsf)))
+  [vsf func-prefix]
+  (walk-symbol->str (map #(assoc % :body nil
+                                 :path (vec (:path %))
+                                 ;; create funcref since (PAGE ..) could
+                                 ;; be used in another namespace
+                                 :func-ref (resolve (symbol (sf->function-name func-prefix %)))) vsf)))
 
 ;; API
+(defn macroexpand-all-except-blocks
+  "Recursively performs all possible macroexpansions in form."
+  {:added "1.1"}
+  [form]
+  (prewalk (fn [x] (if (and (seq? x) (not (is-block? x))) (macroexpand x) x)) form))
+
 (defmacro defpage
   "to define a page"
   [func-prefix params & body]
   (assert (symbol? func-prefix))
   (assert (vector? params))
   (assert (= (count body) 1))
-  (let [vsf:block->vsf:fn-call (partial vsf:block->vsf:fn-call func-prefix)
+  (trace body)
+  (let [body (macroexpand-all-except-blocks body)
+        vsf:block->vsf:fn-call (partial vsf:block->vsf:fn-call func-prefix)
         vsf (-> (wrap-root-block *sf-root-name* body params) 
-                (body->expanded-body)     ;; expand callblocks
+                ;(body->expanded-body)     ;; expand callblocks
                 (body->vsf)              ;; extract sf
                 (unwrap-root-path)       ;; remove wrapped from path
                 (vsf:block->vsf:fn-call) ;; implode blocks to funcalls
@@ -226,8 +238,23 @@ symbols to strings"
          ~@(vsf->defn func-prefix vsf))
 
        ;; generate any routes for functions
-       (def ~func-prefix {:vsf ~(vec (vsf->mexpandable-vsf vsf))
+       (def ~func-prefix {:vsf ~(vec (vsf->mexpandable-vsf vsf func-prefix))
                           :func-prefix ~(str func-prefix)}))))
+
+(defmacro callblock [block-id label]
+  ;; find name in registry
+  ;; expand form
+  (assert (keyword? block-id))
+  (assert (keyword? label))
+  (if (not (contains? *defblock-registry* block-id))
+    (format  "Trying to call a nonexistsent body: (%s)" block-id)
+    ;; expand to block by finding the element form
+    ;; the registry and expanding it so the code scanner can
+    ;; create all the routes etc ...
+    (special-form->block (assoc (*defblock-registry* block-id) :name label))) 
+  )
+
+(declare block)
 
 (defn wrap-request-bindings 
   "wraps around needed bindings"
@@ -261,7 +288,7 @@ symbols to strings"
   "to define a block which can get expanded in a
 defroutes-page, name will be stored in *defblock-registry* for the expander"
   [func-prefix params & body]
-  (assert (symbol? func-prefix))
+  (assert (keyword? func-prefix))
   (assert (vector? params))
   (let [wrapped-body (body->block 'block func-prefix body params)]
     (alter-var-root #'*defblock-registry* #(assoc % (keyword func-prefix) (block->special-form wrapped-body [])))
@@ -308,3 +335,9 @@ defroutes-page, name will be stored in *defblock-registry* for the expander"
    converted to strings"
   [up n & p]
   (callpartial up n {:params (stringify-keys (apply hash-map p))}))
+
+;; debugging
+
+(defn clocks-debug-routes []
+  [:ol (for [[n r] routes*]
+         [:li n "-->" r])])
