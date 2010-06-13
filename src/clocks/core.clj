@@ -253,8 +253,6 @@ symbols to strings"
     (special-form->block (assoc (*defblock-registry* block-id) :name (subs (str label) 1)))) 
   )
 
-(declare block)
-
 (defn wrap-request-bindings 
   "wraps around needed bindings"
   ([handler prefix]
