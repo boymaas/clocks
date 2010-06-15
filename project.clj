@@ -1,4 +1,4 @@
-(defproject clocks "0.6"
+(defproject clocks "0.7"
   :description "A webdsl on top of compojure, see: http://github.com/boymaas/clocks/"
   :dependencies [
                  [org.clojure/clojure "1.2.0-master-SNAPSHOT"]

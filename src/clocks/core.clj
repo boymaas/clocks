@@ -1,12 +1,12 @@
 (ns clocks.core
   (:use 
-        clojure.contrib.trace
-        hiccup.core
-        compojure.core
-        compojure.response
-        clojure.walk
-        clocks.data
-        clocks.md5))
+   clojure.contrib.trace
+   hiccup.core
+   compojure.core
+   compojure.response
+   clojure.walk
+   clocks.data
+   clocks.md5))
 (comment
   sf    spefical form eg. callblock block
   vsf   vector special form
@@ -47,7 +47,7 @@
                path)
         walker* (partial walker filter? f path)]
     ;; define new function
-       
+    
     (let [b* (cond
               (list? b) (apply list (map walker* b))
               (seq? b) (doall (map walker* b))
@@ -64,16 +64,16 @@
   "expands callblocks inside body"
   [body]
   (walker is-callblock? (fn [p b]
-            (let [[type block-id label] b]
-              ;; find name in registry
-              ;; expand form
-              (if (not (contains? *defblock-registry* block-id))
-                (format  "Trying to call a nonexistsent block: (%s)" block-id)
-                ;; expand to block by finding the element form
-                ;; the registry and expanding it so the code scanner can
-                ;; create all the routes etc ...
-                (special-form->block (assoc (*defblock-registry* block-id) :name label))) 
-              ))
+                          (let [[type block-id label] b]
+                            ;; find name in registry
+                            ;; expand form
+                            (if (not (contains? *defblock-registry* block-id))
+                              (format  "Trying to call a nonexistsent block: (%s)" block-id)
+                              ;; expand to block by finding the element form
+                              ;; the registry and expanding it so the code scanner can
+                              ;; create all the routes etc ...
+                              (special-form->block (assoc (*defblock-registry* block-id) :name (keyword->symbol label)))) 
+                            ))
           ;; extra params
           [] body ))
 
@@ -84,11 +84,11 @@
   ([body] (body->vsf body []))
   ([body path]
      (binding [*accumulator* (atom  [])]
-        (walker is-block? (fn [p b]
-                  (swap! *accumulator* conj (block->special-form b p))
-                  b)
-                [] body)
-        @*accumulator*)))
+       (walker is-block? (fn [p b]
+                           (swap! *accumulator* conj (block->special-form b p))
+                           b)
+               [] body)
+       @*accumulator*)))
 
 ;; parse individual blocks and transform block
 ;; definition to named - callblocks calling to be generated functions
@@ -99,10 +99,10 @@ to a direct function call"
   (let [msf (vsf->msf vsf)]
     (for [sf vsf]
       (assoc sf :body (walker is-block? (fn [p b]
-                                (let [[_ name] b]
-                                  ;; (funcall *r)
-                                  `(~(sf->function-name prefix (msf name)) ~'uri-prefix* r*)
-                                  ))
+                                          (let [[_ name] b]
+                                            ;; (funcall *r)
+                                            `(~(sf->function-name prefix (msf name)) ~'uri-prefix* r*)
+                                            ))
                               [] (:body sf))))))
 
 ;; WRAPPING
@@ -208,14 +208,55 @@ symbols to strings"
                                  :path (vec (:path %))
                                  ;; create funcref since (PAGE ..) could
                                  ;; be used in another namespace
-                                 :func-ref (resolve (symbol (sf->function-name func-prefix %)))) vsf)))
+                                 :func-ref (sf->function-name func-prefix %)) vsf)))
+
+
+;; selective expantions
+;; todo make this generic ..
+
+(defn do-not-expand? [x]
+  (and (seq? x)
+       ;; do not expand html
+       (symbol? (first x))
+       ;; in symbol table or a javascript macro (beginning with $
+       (or  (some #(= (symbol (name (first x))) %) ['block 'html 'js 'fn 'when 'when-not 'if])
+            (= (first (name (first x))) \$))))
+
+(defn macroexpand-except-blocks
+  "Repeatedly calls macroexpand-1 on form until it no longer
+  represents a macro form, then returns it.  Note neither
+  macroexpand-1 nor macroexpand expand macros in subforms."
+  {:added "1.0"}
+  [form]
+    (let [ex (macroexpand-1 form)]
+      (if (or (do-not-expand? ex)
+              (identical? ex form))
+        form
+        (macroexpand-except-blocks ex))))
 
 ;; API
 (defn macroexpand-all-except-blocks
   "Recursively performs all possible macroexpansions in form."
   {:added "1.1"}
   [form]
-  (prewalk (fn [x] (if (and (seq? x) (not (is-block? x))) (macroexpand x) x)) form))
+  (prewalk (fn [x] (cond
+                    ;; if one of the special do not expand
+                    (do-not-expand? x)
+                    x
+                    ;; not a special form but a sequence
+                    ;; try to expand
+                    (seq? x) (macroexpand-except-blocks x)
+                    ;; the rest just return
+                    :default x)) form))
+
+
+
+(defmacro defpage-exp
+  [func-prefix params & body]
+  (assert (symbol? func-prefix))
+  (assert (vector? params))
+  (assert (= (count body) 1))
+  (macroexpand-all-except-blocks body))
 
 (defmacro defpage
   "to define a page"
@@ -226,9 +267,9 @@ symbols to strings"
   (let [body (macroexpand-all-except-blocks body)
         vsf:block->vsf:fn-call (partial vsf:block->vsf:fn-call func-prefix)
         vsf (-> (wrap-root-block *sf-root-name* body params) 
-                ;(body->expanded-body)     ;; expand callblocks
-                (body->vsf)              ;; extract sf
-                (unwrap-root-path)       ;; remove wrapped from path
+                (body->expanded-body)     ;; expand callblocks
+                (body->vsf)             ;; extract sf
+                (unwrap-root-path)      ;; remove wrapped from path
                 (vsf:block->vsf:fn-call) ;; implode blocks to funcalls
                 )]
     `(do
@@ -237,21 +278,16 @@ symbols to strings"
          ~@(vsf->defn func-prefix vsf))
 
        ;; generate any routes for functions
-       (def ~func-prefix {:vsf ~(vec (vsf->mexpandable-vsf vsf func-prefix))
-                          :func-prefix ~(str func-prefix)}))))
+       (let [expandable-vsf# ~(vec (vsf->mexpandable-vsf vsf func-prefix))]
 
-(defmacro callblock [block-id label]
-  ;; find name in registry
-  ;; expand form
-  (assert (keyword? block-id))
-  (assert (keyword? label))
-  (if (not (contains? *defblock-registry* block-id))
-    (format  "Trying to call a nonexistsent body: (%s)" block-id)
-    ;; expand to block by finding the element form
-    ;; the registry and expanding it so the code scanner can
-    ;; create all the routes etc ...
-    (special-form->block (assoc (*defblock-registry* block-id) :name (subs (str label) 1)))) 
-  )
+       ;; resolve the functionnames here, at compile time
+       ;; making sure the defn's are created and *ns* is set
+       ;; to the defpage caller
+         (def ~func-prefix (fn [] {:vsf (for [sf# expandable-vsf#]
+                                          (assoc sf# :func-ref (ns-resolve ~*ns* (symbol (:func-ref sf#)))))
+                                   :func-prefix ~(str func-prefix)})))
+
+       )))
 
 (defn wrap-request-bindings 
   "wraps around needed bindings"
@@ -279,7 +315,10 @@ symbols to strings"
   (assert (string? url-prefix))
   (assert (symbol? page))
   (let [page (var-get (resolve page))]
-    `(routes ~@(vsf->any-routes (:vsf page) (:func-prefix page) url-prefix))))
+    (when-not (fn? page)
+      (throw (Exception. "Supplied PAGE parameter does not resolve to correct type")))
+    (let [config (page)]
+      `(routes ~@(vsf->any-routes (:vsf config) (:func-prefix config) url-prefix)))))
 
 (defmacro defblock
   "to define a block which can get expanded in a

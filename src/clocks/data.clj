@@ -1,4 +1,5 @@
 (ns clocks.data
+  (:use clojure.contrib.trace)
   (:use clojure.contrib.str-utils))
 
 ;; paths represented as arrays
@@ -49,11 +50,11 @@ indexed by name"
             vsf)))
 
 ;; helpers on identifying special forms
-(defn symbol-and-eq? [s name]
+(defn symbol-and-eq? [s n]
   (and (seq? s)
-       (symbol? (first  s))
+       (symbol? (first s))
        ;; symbols resolve to same namespace var
-       (= (first s) name)))
+       (= (symbol (name  (first s))) n)))
 
 (defn is-block? [s]
   (or  (symbol-and-eq? s 'block)
@@ -64,3 +65,7 @@ indexed by name"
 
 (defn block-name [b]
   (second b))
+
+
+(defn keyword->symbol [k]
+  (symbol  (subs (str k) 1)))
