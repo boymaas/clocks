@@ -14,13 +14,24 @@
   this is done by expand-js-macros 
   )
 
+
 (defn expand-js-macros 
   "Recursively performs all possible macroexpansions in form."
   [form]
-  (prewalk (fn [x] (if (and (seq? x)
-                            (= (first (str (first x))) \$))
+  (prewalk (fn [x] (cond
+                    (and (seq? x)
+                         (symbol? (first x))
+                         ;; need to get first character of name
+                         ;; not of resolved var. clojure
+                         ;; resolves names in a quasiquote 
+                         ;; thus when used in another namespace we
+                         ;; get problems when we don't de-resolve
+                         (= (first (name (first x))) \$))
                      (macroexpand x)
-                     x))
+                     ;; unresolve the probable resolved symbol
+                     (symbol? x) (symbol (name x))
+                     ;; default return
+                     :default x))
            form))
 
 (defn keyword->cssid [k]

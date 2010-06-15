@@ -7,6 +7,8 @@
   Jquery specific convenience macros, seperated from
   defjs since it couples to clocks.core)
 
+(declare $)
+
 (defmacro $defjs [& body]
   "wraps generated scripts in a jquery onloaded and
    script tag, we need to eval the seperate form
@@ -18,6 +20,9 @@
 
 ;; quasiquote always resolves symbols used so either
 ;; escape them or use lists
+
+(defjs-macro $call [xpath func & params]
+  `(. ($ ~xpath) ~func ~@params))
 
 (defjs-macro $id-on-event [id name & body]
   `(. ($ ~(keyword->cssid id)) ~name (fn [~'ev] ~@body)))
