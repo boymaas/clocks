@@ -1,5 +1,6 @@
 (ns clocks.defjs 
   (:use clojure.walk)
+  (:use hiccup.page-helpers)
   (:use [com.reasonr.scriptjure :only (js)]))
 
 (comment
@@ -45,7 +46,7 @@
    script tag, we need to eval the seperate form
    for output otherwise macro-expantion of nested macro's
    stops."
-  `[:script (js ~@(expand-js-macros body))])
+  `(javascript-tag (js ~@(expand-js-macros body))))
 
 
 (defmacro defjs-macro [name params & body]

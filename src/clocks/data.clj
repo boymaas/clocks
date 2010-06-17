@@ -56,9 +56,15 @@ indexed by name"
        ;; symbols resolve to same namespace var
        (= (symbol (name  (first s))) n)))
 
+;; todo: maybe rename to special-from
 (defn is-block? [s]
-  (or  (symbol-and-eq? s 'block)
+  (or  (symbol-and-eq? s 'json)
+       (symbol-and-eq? s 'block)
+       (symbol-and-eq? s 'block-on-post)
        (symbol-and-eq? s 'page)))
+
+(defn is-json? [s]
+  (symbol-and-eq? s 'json))
 
 (defn is-callblock? [s]
   (symbol-and-eq? s 'callblock))

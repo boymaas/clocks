@@ -1,6 +1,7 @@
 (ns clocks.core
   (:use 
    clojure.contrib.trace
+   clojure.contrib.json.write
    hiccup.core
    compojure.core
    compojure.response
@@ -90,8 +91,13 @@
                [] body)
        @*accumulator*)))
 
+
 ;; parse individual blocks and transform block
 ;; definition to named - callblocks calling to be generated functions
+
+;; also strips json 
+;; todo: rename to vsf:block->vsf:block-collapsed
+
 (defn- vsf:block->vsf:fn-call 
   "replaces (body ..) blocks in every element of a vsf
 to a direct function call"
@@ -99,9 +105,13 @@ to a direct function call"
   (let [msf (vsf->msf vsf)]
     (for [sf vsf]
       (assoc sf :body (walker is-block? (fn [p b]
-                                          (let [[_ name] b]
-                                            ;; (funcall *r)
-                                            `(~(sf->function-name prefix (msf name)) ~'uri-prefix* r*)
+                                          (let [[type name] b]
+                                            (case type
+                                                  ;; in case of json blocks
+                                                  ;; these schouldn't be executed
+                                                  'json nil
+                                                  ;; rest call from function --> (funcall *r)
+                                                  `(~(sf->function-name prefix (msf name)) ~'uri-prefix* r*))
                                             ))
                               [] (:body sf))))))
 
@@ -116,13 +126,19 @@ request params"
      [~(keyword (str "div#" (str name)))
       ~@body]))
 
+(defn- wrap-block-on-post
+  "wraps a block, will execute only on a post"
+  [name params body]
+  `(when (= (r* :request-method) :post)
+     ~(wrap-block name params body)))
+
 (defn- wrap-json
   "wraps a block into a form able
 to output a json request and preparses
 request params"
   [name params body]
   `(let [{:strs ~(vec params)} ~'p*]
-     ~@body))
+     (json-str ~@body)))
 
 (defn- wrap-page
   "wraps on page level"
@@ -145,6 +161,7 @@ variables"
           (case type
                 'page (wrap-page name params body)
                 'block (wrap-block name params body)
+                'block-on-post (wrap-block-on-post name params body)
                 'json (wrap-json name params body)
                 (throw (Exception. (str "Unknown type to wrap: " type) )))))))
 
@@ -212,7 +229,7 @@ symbols to strings"
 
 
 ;; selective expantions
-;; todo make this generic ..
+;; todo make this generic, expand excluding specific forms ..
 
 (defn do-not-expand? [x]
   (and (seq? x)
@@ -224,8 +241,7 @@ symbols to strings"
 
 (defn macroexpand-except-blocks
   "Repeatedly calls macroexpand-1 on form until it no longer
-  represents a macro form, then returns it.  Note neither
-  macroexpand-1 nor macroexpand expand macros in subforms."
+  represents a macro form, or encounters a do-not-expand."
   {:added "1.0"}
   [form]
     (let [ex (macroexpand-1 form)]
@@ -249,14 +265,6 @@ symbols to strings"
                     ;; the rest just return
                     :default x)) form))
 
-
-
-(defmacro defpage-exp
-  [func-prefix params & body]
-  (assert (symbol? func-prefix))
-  (assert (vector? params))
-  (assert (= (count body) 1))
-  (macroexpand-all-except-blocks body))
 
 (defmacro defpage
   "to define a page"
@@ -357,9 +365,12 @@ defroutes-page, name will be stored in *defblock-registry* for the expander"
 (defn callpartial
   "calls a partial"
   [url-prefix name request]
+  ;; try to resolve name
+  (let [name (or (resolve name)
+                 (resolve (symbol (str  "clpartial-" name))))])
   `(let [response# ((wrap-request-bindings
-                   ~(resolve (symbol (str  "clpartial-" name))) ~url-prefix) ;; name of partial
-                  ~request)]
+                     ~name ~url-prefix) ;; name of partial
+                    ~request)]
      (assoc response# :body-md5 (subs (md5-sum (response# :body)) 0 4)))) ;; in request format
 
 (defn md5= [md5:0-4 response]
